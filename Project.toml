@@ -1,0 +1,10 @@
+name = "EEGIO"
+uuid = "0b63a203-985a-4b95-9578-b702c99cc299"
+authors = ["Marcin Koculak <koculak.marcin@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
+
+[compat]
+julia = "1.8"
