@@ -4,7 +4,7 @@ function write_bdf(f::String, bdf::BDF)
     end
 end
 
-function write_bdf(fid, bdf::BDF)
+function write_bdf(fid::IO, bdf::BDF)
     # Write the header
     write_header(fid, bdf)
 

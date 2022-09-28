@@ -50,7 +50,7 @@ function read_header(fid::IO)
     nSampRec =      decodeChanNumbers(fid, nChannels, 8)
     reserved =      decodeChanStrings(fid, nChannels, 32)
 
-    return BDFHeader(idCodeNonASCII, idCode, subID, recID, startDate, startTime, nBytes, 
+    return BDFheader(idCodeNonASCII, idCode, subID, recID, startDate, startTime, nBytes, 
     versionDataFormat, nDataRecords, recordDuration, nChannels, chanLabels, transducer, 
     physDim, physMin, physMax, digMin, digMax, prefilt, nSampRec, reserved)
 end
