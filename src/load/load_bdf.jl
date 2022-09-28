@@ -92,7 +92,7 @@ function read_data(fid::IO, header::BDFheader, addOffset, numPrecision, chanSele
     http://www.biosemi.nl/forum/viewtopic.php?f=4&t=1520&sid=ba7f775f06adbaa165230fdf1ad55c1c
 
     However, for compatibility with other EEG software, adding offset is the default.
-    It can be switched of through setting the parameter offset=false.
+    It can be switched off through setting the parameter offset=false.
     =#
     if addOffset
         offset = Float32.(header.physMin .- (header.digMin .* scaleFactor))

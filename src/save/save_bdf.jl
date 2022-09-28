@@ -93,27 +93,27 @@ function write_data(fid, header, data, useOffset)
     # is more efficient than writing the whole array at once.
     # Here we determine the size of chunk that is a multiple of record size and closest
     # to 512k which is used as a default.
-    def_chunk = 512_000
-    record_size = channels*srate*duration*3
+    defChunk = 512_000
+    recordSize = channels*srate*duration*3
 
-    chunk = def_chunk + record_size/2
-    chunk = Int(chunk - chunk%record_size)
+    chunk = defChunk + recordSize/2
+    chunk = Int(chunk - chunk%recordSize)
     if chunk == 0
-        chunk = record_size
+        chunk = recordSize
     end
-    rec_num = Int(chunk/record_size)
+    recNum = Int(chunk/recordSize)
     
     output = Vector{UInt8}(undef,chunk)
 
-    for rec_start = 1:rec_num:records
-        if (rec_start + rec_num - 1) <= records
-            rec_end = rec_start + rec_num - 1
+    for recStart = 1:recNum:records
+        if (recStart + recNum - 1) <= records
+            recEnd = recStart + recNum - 1
         else
-            rec_end = records
+            recEnd = records
         end
         
         pointer = 1
-        for rec in rec_start:rec_end
+        for rec in recStart:recEnd
             for chan in 1:channels
                 for sample in 1:(srate * duration)
                     recode_value(data, output, pointer, rec, srate, sample, chan, scaleFactor, offset)
@@ -121,7 +121,7 @@ function write_data(fid, header, data, useOffset)
                 end
             end
         end
-        @inbounds write(fid, @view output[1:(rec_end-rec_start+1)*record_size])
+        @inbounds write(fid, @view output[1:(recEnd-recStart+1)*recordSize])
     end
     output = nothing
 end
