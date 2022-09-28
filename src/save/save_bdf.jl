@@ -4,12 +4,12 @@ function write_bdf(f::String, bdf::BDF)
     end
 end
 
-function write_bdf(fid::IO, bdf::BDF)
+function write_bdf(fid::IO, bdf::BDF; useOffset=true)
     # Write the header
     write_header(fid, bdf)
 
     # Write the data
-    write_data(fid, bdf.header, bdf.data)
+    write_data(fid, bdf.header, bdf.data, useOffset)
 
     close(fid)
 end
@@ -76,51 +76,71 @@ function write_channel_records(fid, nChannels, field, fieldLength; default="")
     end
 end
 
-function write_data(fid, header, data)
+function write_data(fid, header, data, useOffset)
 
     scaleFactor = Float32.(header.physMax-header.physMin)./(header.digMax-header.digMin)
+    if useOffset
+        offset = Float32.(header.physMin .- (header.digMin .* scaleFactor))
+    else
+        offset = Int32.(header.physMin .* 0)
+    end
     records = header.nDataRecords
     channels = header.nChannels
     srate = header.nSampRec[1]
     duration = header.recordDuration
     
-    output = Vector{UInt8}(undef,records*channels*srate*duration*3)
-    pointer = 1
-    for rec in 1:records
-        for chan in 1:channels
-            for sample in 1:(srate * duration)
-                recode_value(data, output, pointer, rec, srate, sample, chan, scaleFactor)
-                pointer += 3
+    # Testing different methods of writing to disk has shown that writing in chunks,
+    # is more efficient than writing the whole array at once.
+    # Here we determine the size of chunk that is a multiple of record size and closest
+    # to 512k which is used as a default.
+    def_chunk = 512_000
+    record_size = channels*srate*duration*3
+
+    chunk = def_chunk + record_size/2
+    chunk = Int(chunk - chunk%record_size)
+    if chunk == 0
+        chunk = record_size
+    end
+    rec_num = Int(chunk/record_size)
+    
+    output = Vector{UInt8}(undef,chunk)
+
+    for rec_start = 1:rec_num:records
+        if (rec_start + rec_num - 1) <= records
+            rec_end = rec_start + rec_num - 1
+        else
+            rec_end = records
+        end
+        
+        pointer = 1
+        for rec in rec_start:rec_end
+            for chan in 1:channels
+                for sample in 1:(srate * duration)
+                    recode_value(data, output, pointer, rec, srate, sample, chan, scaleFactor, offset)
+                    pointer += 3
+                end
             end
         end
+        @inbounds write(fid, @view output[1:(rec_end-rec_start+1)*record_size])
     end
-    # Testing different methods of writing to disk has shown that writing in 512k chunks,
-    # is more efficient than writing the whole array at once.
-    ptr = 1
-    chunk = 512000
-    while length(output) > ptr+ chunk
-        @inbounds write(fid, @view output[ptr:ptr+chunk])
-        ptr += chunk
-    end
-    write(fid, @view output[ptr:end])
     output = nothing
 end
 
-function recode_value(data::Matrix{Int32}, output, pointer, rec, srate, sample, chan, scaleFactor)
+function recode_value(data::Matrix{Int32}, output, pointer, rec, srate, sample, chan, scaleFactor, offset)
     @inbounds output[pointer] = data[(rec-1)*srate+sample, chan] % UInt8
     @inbounds output[pointer+1] = (data[(rec-1)*srate+sample, chan] >> 8) % UInt8
     @inbounds output[pointer+2] = (data[(rec-1)*srate+sample, chan] >> 16) % UInt8
 end
 
-function recode_value(data::Matrix{Int64}, output, pointer, rec, srate, sample, chan, scaleFactor)
+function recode_value(data::Matrix{Int64}, output, pointer, rec, srate, sample, chan, scaleFactor, offset)
     value = round(Int32, data[(rec-1)*srate+sample, chan])
     @inbounds output[pointer] = value % UInt8
     @inbounds output[pointer+1] = (value >> 8) % UInt8
     @inbounds output[pointer+2] = (value >> 16) % UInt8
 end
 
-function recode_value(data::Matrix{<:AbstractFloat}, output, pointer, rec, srate, sample, chan, scaleFactor)
-    value = round(Int32, map(/,data[(rec-1)*srate+sample, chan],scaleFactor[chan]))
+function recode_value(data::Matrix{<:AbstractFloat}, output, pointer, rec, srate, sample, chan, scaleFactor, offset)
+    value = round(Int32, (data[(rec-1)*srate+sample, chan]/scaleFactor[chan])-offset[chan])
     @inbounds output[pointer] = value % UInt8
     @inbounds output[pointer+1] = (value >> 8) % UInt8
     @inbounds output[pointer+2] = (value >> 16) % UInt8
