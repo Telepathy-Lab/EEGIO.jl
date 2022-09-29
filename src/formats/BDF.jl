@@ -1,4 +1,4 @@
-mutable struct BDFheader
+mutable struct BDFHeader
     idCodeNonASCII::Int32
     idCode::String
     subID::String
@@ -22,9 +22,15 @@ mutable struct BDFheader
     reserved::Vector{String}
 end
 
-struct BDF
-    header::BDFheader
+struct BDF <: EEGData
+    header::BDFHeader
     data::Matrix
     path::String
     file::String
 end
+
+Base.show(io::IO, bdf::BDFHeader) = print(io, "Header")
+Base.show(io::IO, bdf::BDF) = print(io, "BDF file, length $(bdf.header.nDataRecords/60) min., $(bdf.header.nChannels) channels")
+Base.show(io::IO, m::MIME"text/plain", bdf::BDF) = print(io, "BDF file, length $(bdf.header.nDataRecords/60) min., $(bdf.header.nChannels) channels")
+
+Base.show(io::IO, ::Type{BDF}) = print(io, "BDF")

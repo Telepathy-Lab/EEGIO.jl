@@ -50,7 +50,7 @@ function read_header(fid::IO)
     nSampRec =      decodeChanNumbers(fid, nChannels, 8)
     reserved =      decodeChanStrings(fid, nChannels, 32)
 
-    return BDFheader(idCodeNonASCII, idCode, subID, recID, startDate, startTime, nBytes, 
+    return BDFHeader(idCodeNonASCII, idCode, subID, recID, startDate, startTime, nBytes, 
     versionDataFormat, nDataRecords, recordDuration, nChannels, chanLabels, transducer, 
     physDim, physMin, physMax, digMin, digMax, prefilt, nSampRec, reserved)
 end
@@ -80,7 +80,7 @@ function decodeChanNumbers(fid, nChannels, size)
 end
 
 # Read the EEG data points to a preallocated array.
-function read_data(fid::IO, header::BDFheader, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, digital)
+function read_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, digital)
     nChannels = header.nChannels
     srate = Int32(header.nSampRec[1] / header.recordDuration)
     scaleFactor = numPrecision.(header.physMax-header.physMin)./(header.digMax-header.digMin)
@@ -220,7 +220,7 @@ function check_status(chans, header)
     end
 end
 
-function update_header!(header::BDFheader, chans)
+function update_header!(header::BDFHeader, chans)
     header.nChannels = length(chans)
     header.chanLabels = header.chanLabels[chans]
     header.transducer = header.transducer[chans]
