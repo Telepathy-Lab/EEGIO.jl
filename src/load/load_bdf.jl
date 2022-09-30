@@ -15,7 +15,7 @@ function read_bdf(fid::IO; onlyHeader=false, addOffset=true, numPrecision=Float6
     path = abspath(filepath[1])
     file = filepath[2]
     # Read the header
-    header = read_header(fid)
+    header = read_bdf_header(fid)
 
     if onlyHeader
         return header
@@ -25,7 +25,7 @@ function read_bdf(fid::IO; onlyHeader=false, addOffset=true, numPrecision=Float6
     end
 end
 
-function read_header(fid::IO)
+function read_bdf_header(fid::IO)
     idCodeNonASCII =    Int32(read(fid, UInt8))
     idCode =            decodeString(fid, 7)
     subID =             decodeString(fid, 80)

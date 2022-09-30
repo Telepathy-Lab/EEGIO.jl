@@ -93,6 +93,7 @@ function write_data(fid, header, data, useOffset)
     # is more efficient than writing the whole array at once.
     # Here we determine the size of chunk that is a multiple of record size and closest
     # to 512k which is used as a default.
+    # TODO: Add a parameter to control the chunk size.
     defChunk = 512_000
     recordSize = channels*srate*duration*3
 
