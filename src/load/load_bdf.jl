@@ -244,12 +244,12 @@ end
 
 # Loop through all segments for each channel
 function convert_data!(raw::Array{UInt8}, data, srate, records, chans, nChannels, scaleFactor, offset)
-    Threads.@threads for (recIdx, record) in [enumerate(records)...]
-        for (chanIdx, chan) in enumerate(chans)
+    Threads.@threads for recIdx in eachindex(records)
+        for chanIdx in eachindex(chans)
             for dataPoint=1:srate
-                sample = (record-1)*nChannels*srate + (chan-1)*srate + dataPoint-1
-                dp = dataPoint+(recIdx-1)*srate
-                convert!(raw, data, dp, sample, chan, chanIdx, scaleFactor, offset)
+                @fastmath sample = (records[recIdx]-1)*nChannels*srate + (chans[chanIdx]-1)*srate + dataPoint-1
+                @fastmath dp = dataPoint+(recIdx-1)*srate
+                convert!(raw, data, dp, sample, chans[chanIdx], chanIdx, scaleFactor, offset)
             end
         end
     end
@@ -258,7 +258,7 @@ end
 # Convert 24-bit integer numbers into floats.
 # Default conversion from digital to analog output.
 function convert!(raw::Array{UInt8}, data::Array{<:AbstractFloat}, dp, sample, chan, chanIdx, scaleFactor, offset)
-    @inbounds data[dp,chanIdx] = ((((Int32(raw[3*sample+1]) << 8) | 
+    @inbounds @fastmath data[dp,chanIdx] = ((((Int32(raw[3*sample+1]) << 8) | 
                                     (Int32(raw[3*sample+2]) << 16) | 
                                     (Int32(raw[3*sample+3]) << 24)) >> 8) * scaleFactor[chan]) + offset[chan]
 end
@@ -266,7 +266,7 @@ end
 # Convert 24-bit integer numbers into 32/64 bit integers.
 # Used when 'digital' option was chosen.
 function convert!(raw::Array{UInt8}, data::Array{<:Integer}, dp, sample, chan, chanIdx, scaleFactor, offset)
-    @inbounds data[dp,chanIdx] = (((Int32(raw[3*sample+1]) << 8) | 
+    @inbounds @fastmath data[dp,chanIdx] = (((Int32(raw[3*sample+1]) << 8) | 
                                     (Int32(raw[3*sample+2]) << 16) | 
                                     (Int32(raw[3*sample+3]) << 24)) >> 8)
 end
