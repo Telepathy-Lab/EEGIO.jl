@@ -1,20 +1,25 @@
+# TODO: Build in a mechanism that chooses mmap if more threads available.
+# Or maybe just use mmap (because its faster, unless user ask for serial write)
+# TODO: add "overwrite" parameter?
+
 function write_bdf(f::String, bdf::BDF)
-    open(f, "w", lock = false) do fid
+    if isfile(f)
+        rm(f)
+    end
+    open(f, "w+", lock = false) do fid
         write_bdf(fid, bdf)
     end
 end
 
 function write_bdf(fid::IO, bdf::BDF; useOffset=true)
     # Write the header
-    write_header(fid, bdf)
+    write_bdf_header(fid, bdf)
 
     # Write the data
-    write_data(fid, bdf.header, bdf.data, useOffset)
-
-    close(fid)
+    write_bdf_data(fid, bdf.header, bdf.data, useOffset)
 end
 
-function write_header(fid, bdf::BDF)
+function write_bdf_header(fid, bdf::BDF)
 
     header = bdf.header
 
@@ -76,7 +81,8 @@ function write_channel_records(fid, nChannels, field, fieldLength; default="")
     end
 end
 
-function write_data(fid, header, data, useOffset)
+# Have this just in case default write will prove faulty.
+function write_bdf_data_seq(fid, header, data, useOffset)
 
     scaleFactor = Float32.(header.physMax-header.physMin)./(header.digMax-header.digMin)
     if useOffset
@@ -124,24 +130,50 @@ function write_data(fid, header, data, useOffset)
         end
         @inbounds write(fid, @view output[1:(recEnd-recStart+1)*recordSize])
     end
-    output = nothing
 end
 
-function recode_value(data::Matrix{Int32}, output, pointer, rec, srate, sample, chan, scaleFactor, offset)
+function write_bdf_data(fid, header, data, useOffset)
+    scaleFactor = Float32.(header.physMax-header.physMin)./(header.digMax-header.digMin)
+    if useOffset
+        offset = Float32.(header.physMin .- (header.digMin .* scaleFactor))
+    else
+        offset = Int32.(header.physMin .* 0)
+    end
+    records = header.nDataRecords
+    channels = header.nChannels
+    srate = header.nSampRec[1]
+    duration = header.recordDuration
+    samples = srate * duration
+    recordSize = channels*srate*duration*3
+    
+    output = Mmap.mmap(fid, Vector{UInt8}, (records*recordSize))
+    Threads.@threads for rec in 1:records
+        for chan in 1:channels
+            for sample in 1:samples
+                @inbounds @fastmath pointer = (sample + samples*(chan-1) + samples*channels*(rec-1))*3-2
+                recode_value(data, output, pointer, rec, srate, sample, chan, scaleFactor, offset)
+            end
+        end
+    end
+    finalize(output)
+    GC.gc(false)
+end
+
+function recode_value(data::Matrix{Int32}, output::Vector{UInt8}, pointer, rec, srate, sample, chan, scaleFactor, offset)
     @inbounds output[pointer] = data[(rec-1)*srate+sample, chan] % UInt8
     @inbounds output[pointer+1] = (data[(rec-1)*srate+sample, chan] >> 8) % UInt8
     @inbounds output[pointer+2] = (data[(rec-1)*srate+sample, chan] >> 16) % UInt8
 end
 
-function recode_value(data::Matrix{Int64}, output, pointer, rec, srate, sample, chan, scaleFactor, offset)
-    value = round(Int32, data[(rec-1)*srate+sample, chan])
+function recode_value(data::Matrix{Int64}, output::Vector{UInt8}, pointer, rec, srate, sample, chan, scaleFactor, offset)
+    @inbounds value = round(Int32, data[(rec-1)*srate+sample, chan])
     @inbounds output[pointer] = value % UInt8
     @inbounds output[pointer+1] = (value >> 8) % UInt8
     @inbounds output[pointer+2] = (value >> 16) % UInt8
 end
 
-function recode_value(data::Matrix{<:AbstractFloat}, output, pointer, rec, srate, sample, chan, scaleFactor, offset)
-    value = round(Int32, (data[(rec-1)*srate+sample, chan]/scaleFactor[chan])-offset[chan])
+function recode_value(data::Matrix{<:AbstractFloat}, output::Vector{UInt8}, pointer, rec, srate, sample, chan, scaleFactor::Vector{Float32}, offset::Vector{Float32})
+    @inbounds @fastmath value = round(Int32, (data[(rec-1)*srate+sample, chan]/scaleFactor[chan])-offset[chan])
     @inbounds output[pointer] = value % UInt8
     @inbounds output[pointer+1] = (value >> 8) % UInt8
     @inbounds output[pointer+2] = (value >> 16) % UInt8

@@ -114,6 +114,8 @@ function read_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chanSele
     end
     data = Array{numPrecision}(undef, (srate*length(records),length(chans)));
     convert_data!(raw, data, srate, records, chans, nChannels, scaleFactor, offset)
+    finalize(raw)
+    GC.gc(false)
     return data
 end
 
@@ -259,14 +261,14 @@ end
 # Default conversion from digital to analog output.
 function convert!(raw::Array{UInt8}, data::Array{<:AbstractFloat}, dp, sample, chan, chanIdx, scaleFactor, offset)
     @inbounds @fastmath data[dp,chanIdx] = ((((Int32(raw[3*sample+1]) << 8) | 
-                                    (Int32(raw[3*sample+2]) << 16) | 
-                                    (Int32(raw[3*sample+3]) << 24)) >> 8) * scaleFactor[chan]) + offset[chan]
+                                            (Int32(raw[3*sample+2]) << 16) | 
+                                            (Int32(raw[3*sample+3]) << 24)) >> 8) * scaleFactor[chan]) + offset[chan]
 end
 
 # Convert 24-bit integer numbers into 32/64 bit integers.
 # Used when 'digital' option was chosen.
 function convert!(raw::Array{UInt8}, data::Array{<:Integer}, dp, sample, chan, chanIdx, scaleFactor, offset)
     @inbounds @fastmath data[dp,chanIdx] = (((Int32(raw[3*sample+1]) << 8) | 
-                                    (Int32(raw[3*sample+2]) << 16) | 
-                                    (Int32(raw[3*sample+3]) << 24)) >> 8)
+                                            (Int32(raw[3*sample+2]) << 16) | 
+                                            (Int32(raw[3*sample+3]) << 24)) >> 8)
 end
