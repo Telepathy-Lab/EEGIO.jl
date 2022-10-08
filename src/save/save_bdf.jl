@@ -1,6 +1,7 @@
 # TODO: Build in a mechanism that chooses mmap if more threads available.
 # Or maybe just use mmap (because its faster, unless user ask for serial write)
 # TODO: add "overwrite" parameter?
+# TODO: add checks if data fits the physical/digital dimensions to be written into Int24
 
 function write_bdf(f::String, bdf::BDF)
     if isfile(f)

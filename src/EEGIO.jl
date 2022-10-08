@@ -2,6 +2,10 @@ module EEGIO
 
 using Mmap
 
+# TODO make a test to check if this value is updated
+# with Pkg.TOML.parsefile(joinpath(pkgdir(EEGIO), "Project.toml"))["version"]
+version = "0.1.0"
+
 abstract type EEGData end
 export EEGData
 
@@ -14,6 +18,7 @@ export BDF, BDFHeader, read_bdf, write_bdf
 # EEG files
 include("formats/EEG.jl")
 include("load/load_eeg.jl")
-export EEG, EEGHeader, read_eeg
+include("save/save_eeg.jl")
+export EEG, EEGHeader, read_eeg, write_eeg
 
 end # module
