@@ -1,4 +1,5 @@
 # TODO: cover cases when user wants to read vhdr or vmrk file instead of eeg
+# TODO: read data and markers from files stated in vhdr file
 # TODO: check correctness with other files
 # TODO: add necessary comments to file
 # TODO: allow for selection of channels / timespan
@@ -188,41 +189,27 @@ function read_eeg_data(fid::IO, header::EEGHeader)
     size = Int32(position(seekend(fid))/bytes)
     seekstart(fid)
 
-    raw = Mmap.mmap(fid)
     channels = length(header.channels["name"])
     samples = Int64(size/channels)
     resolution = header.channels["resolution"]
+
+    raw = Mmap.mmap(fid, Matrix{header.binary}, (channels, samples))
     data = Array{Float32}(undef, (samples, channels))
 
-    if header.binary == Int16
-        convert_int16!(raw, data, channels, samples)
-    elseif header.binary == Float32
-        convert_float32!(raw, data, channels, samples)
-    end
-    data .*= resolution'
+    convert_data!(raw, data, samples, resolution)
+
+    finalize(raw)
     return data
 end
 
-function convert_int16!(raw::Vector, data::Array, channels::Integer, samples::Integer)
+function convert_data!(raw::Array{Int16}, data::Array, samples::Integer, resolution::Vector{Float32})
     Threads.@threads for sample=1:samples
-        start = 1 + 2*channels*(sample-1)
-        finish = 2*channels*sample
-        @inbounds @views raws = raw[start:finish]
-        @inbounds @views datas = data[sample,:]
-        for k=1:length(raws)÷2
-            @inbounds @views datas[k] = Float32(reinterpret(Int16,raws[(2*k-1):2*k])[1])
-        end
+        @inbounds @views data[sample,:] .= Float32.(raw[:,sample]) .* resolution
     end
 end
 
-function convert_float32!(raw::Vector, data::Array, channels::Integer, samples::Integer)
+function convert_data!(raw::Array{Float32}, data::Array, samples::Integer, resolution::Vector{Float32})
     Threads.@threads for sample=1:samples
-        start = 1 + 4*channels*(sample-1)
-        finish = 4*channels*sample
-        @inbounds @views raws = raw[start:finish]
-        @inbounds @views datas = data[sample,:]
-        for k=1:length(raws)÷4
-            @inbounds @views datas[k] = reinterpret(Float32,raws[(4*k-3):4*k])[1]
-        end
+        @inbounds @views data[sample,:] .= raw[:,sample] .* resolution
     end
 end
