@@ -1,3 +1,5 @@
+# TODO: Make sure channel/range selection also corrects the appropriate header fields
+
 # Public function to use without FileIO 
 function read_bdf(f::String; onlyHeader=false, addOffset=true, numPrecision=Float64,
     chanSelect=:All, chanIgnore=:None, timeSelect=:All, readStatus=true, digital=false)
@@ -20,7 +22,7 @@ function read_bdf(fid::IO; onlyHeader=false, addOffset=true, numPrecision=Float6
     if onlyHeader
         return header
     else
-        data = read_data(fid, header, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, digital)
+        data = read_bdf_data(fid, header, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, digital)
         return BDF(header, data, path, file)
     end
 end
@@ -80,7 +82,7 @@ function decodeChanNumbers(fid, nChannels, size)
 end
 
 # Read the EEG data points to a preallocated array.
-function read_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, digital)
+function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, digital)
     nChannels = header.nChannels
     srate = Int32(header.nSampRec[1] / header.recordDuration)
     scaleFactor = numPrecision.(header.physMax-header.physMin)./(header.digMax-header.digMin)
