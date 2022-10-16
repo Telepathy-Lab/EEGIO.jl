@@ -174,7 +174,7 @@ function recode_value(data::Matrix{Int64}, output::Vector{UInt8}, pointer, rec, 
 end
 
 function recode_value(data::Matrix{<:AbstractFloat}, output::Vector{UInt8}, pointer, rec, srate, sample, chan, scaleFactor::Vector{Float32}, offset::Vector{Float32})
-    @inbounds @fastmath value = round(Int32, (data[(rec-1)*srate+sample, chan]/scaleFactor[chan])-offset[chan])
+    @inbounds @fastmath value = round(Int32, ((data[(rec-1)*srate+sample, chan]-offset[chan])/scaleFactor[chan]))
     @inbounds output[pointer] = value % UInt8
     @inbounds output[pointer+1] = (value >> 8) % UInt8
     @inbounds output[pointer+2] = (value >> 16) % UInt8
