@@ -22,7 +22,7 @@ mutable struct BDFHeader
     reserved::Vector{String}
 end
 
-struct BDF <: EEGData
+mutable struct BDF <: EEGData
     header::BDFHeader
     data::Matrix
     path::String
@@ -30,7 +30,7 @@ struct BDF <: EEGData
 end
 
 Base.show(io::IO, bdf::BDFHeader) = print(io, "Header")
-Base.show(io::IO, bdf::BDF) = print(io, "BDF file, length $(bdf.header.nDataRecords/60) min., $(bdf.header.nChannels) channels")
-Base.show(io::IO, m::MIME"text/plain", bdf::BDF) = print(io, "BDF file, length $(bdf.header.nDataRecords/60) min., $(bdf.header.nChannels) channels")
+Base.show(io::IO, bdf::BDF) = print(io, "BDF file, length $(round(bdf.header.nDataRecords/60,digits=2)) min., $(bdf.header.nChannels) channels")
+Base.show(io::IO, m::MIME"text/plain", bdf::BDF) = print(io, "BDF file, length $(round(bdf.header.nDataRecords/60,digits=2)) min., $(bdf.header.nChannels) channels")
 
 Base.show(io::IO, ::Type{BDF}) = print(io, "BDF")

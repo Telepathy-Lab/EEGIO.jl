@@ -21,4 +21,8 @@ include("load/load_eeg.jl")
 include("save/save_eeg.jl")
 export EEG, EEGHeader, read_eeg, write_eeg
 
+# Helper functions
+include("utils/resize.jl")
+export crop, select, split
+
 end # module

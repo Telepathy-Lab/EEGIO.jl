@@ -225,6 +225,7 @@ function check_status(chans, header)
 end
 
 function update_header!(header::BDFHeader, chans)
+    header.nBytes = (length(chans)+1)*256
     header.nChannels = length(chans)
     header.chanLabels = header.chanLabels[chans]
     header.transducer = header.transducer[chans]
