@@ -17,3 +17,7 @@ struct EEG
     path::String
     file::String
 end
+
+Base.show(io::IO, eeg::EEGHeader) = print(io, "EEG Header")
+Base.show(io::IO, eeg::EEG) = print(io, "EEG file")
+Base.show(io::IO, ::Type{EEG}) = print(io, "EEG")
