@@ -13,7 +13,7 @@ end
 
 function read_eeg(fid::IO; onlyHeader=false)
 
-    filepath = splitdir(split(strip(fid.name, ['<','>']), ' ')[2])
+    filepath = splitdir(split(strip(fid.name, ['<','>']), ' ', limit=2)[2])
     path = abspath(filepath[1])
     file = filepath[2]
 

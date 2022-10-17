@@ -13,7 +13,7 @@ end
 # Internal function called by public API and FileIO
 function read_bdf(fid::IO; onlyHeader=false, addOffset=true, numPrecision=Float64,
     chanSelect=:All, chanIgnore=:None, timeSelect=:All, readStatus=true, digital=false)
-    filepath = splitdir(split(strip(fid.name, ['<','>']), ' ')[2])
+    filepath = splitdir(split(strip(fid.name, ['<','>']), ' ', limit=2)[2])
     path = abspath(filepath[1])
     file = filepath[2]
     # Read the header
