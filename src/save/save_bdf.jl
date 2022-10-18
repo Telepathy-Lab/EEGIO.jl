@@ -48,6 +48,7 @@ function write_bdf_header(fid, bdf::BDF)
     write_channel_records(fid, chans, header.reserved, 32)
 end
 
+# Write the general data information
 function write_record(fid, field, fieldLength; default="")
     # Prepare the entry.
     if field == ""
@@ -64,6 +65,7 @@ function write_record(fid, field, fieldLength; default="")
     write(fid, codeunits(record))
 end
 
+# Write the chennel specific information
 function write_channel_records(fid, nChannels, field, fieldLength; default="")
     for chan in 1:nChannels
         #Prepare the entry for each channel.
@@ -133,13 +135,17 @@ function write_bdf_data_seq(fid, header, data, useOffset)
     end
 end
 
+# Write data into a file.
 function write_bdf_data(fid, header, data, useOffset)
     scaleFactor = Float32.(header.physMax-header.physMin)./(header.digMax-header.digMin)
+
+    # Insert the offset for compatibility with other software
     if useOffset
         offset = Float32.(header.physMin .- (header.digMin .* scaleFactor))
     else
         offset = Int32.(header.physMin .* 0)
     end
+
     records = header.nDataRecords
     channels = header.nChannels
     srate = header.nSampRec[1]

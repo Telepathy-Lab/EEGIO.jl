@@ -2,19 +2,27 @@
 # TODO: Add checks if data (after resolution corrections) fits the Int16/Float32
 
 function write_eeg(f::String, eeg::EEG)
+    # Get the name for all three files
     file = split(f,"/")[end]
     filename = join(split(file,'.')[1:end-1],'.')
+    
+    # Write the header file
     open(filename*".vhdr", "w", lock = false) do fidh
         write_eeg_header(fidh, filename, eeg.header)
     end
+
+    # Write the markers file
     open(filename*".vmrk", "w", lock = false) do fidm
         write_eeg_markers(fidm, filename, eeg.markers)
     end
+
+    # Write the data file
     open(filename*".eeg", "w+", lock = false) do fidd
         write_eeg_data(fidd, eeg.header, eeg.data)
     end
 end
 
+# Writing the header information
 function write_eeg_header(fid::IO, filename::String, header::EEGHeader)
     println(fid, """
     BrainVision Data Exchange Header File Version 1.0"
@@ -63,6 +71,7 @@ function write_eeg_header(fid::IO, filename::String, header::EEGHeader)
     """)
 end
 
+# Writing the marker information
 function write_eeg_markers(fid::IO, filename::String, marks::EEGMarkers)
     markers = marks.markers
 
@@ -95,6 +104,7 @@ function write_eeg_markers(fid::IO, filename::String, marks::EEGMarkers)
     end
 end
 
+# Writing the EEG data
 function write_eeg_data(fid::IO, header::EEGHeader, data::Array)
     channels = length(header.channels["name"])
     samples = size(data)[1]
@@ -106,6 +116,7 @@ function write_eeg_data(fid::IO, header::EEGHeader, data::Array)
     finalize(raw)
 end
 
+# Writing data sample point (one row) at a time.
 function convert_data!(raw::Array{Float32}, data::Array, samples::Integer)
     Threads.@threads for sample=1:samples
         @inbounds @views raw[:,sample] .= data[sample,:]

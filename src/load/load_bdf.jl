@@ -13,21 +13,26 @@ end
 # Internal function called by public API and FileIO
 function read_bdf(fid::IO; onlyHeader=false, addOffset=true, numPrecision=Float64,
     chanSelect=:All, chanIgnore=:None, timeSelect=:All, readStatus=true, digital=false)
+    
+    # Preserve the path and the name of file
     filepath = splitdir(split(strip(fid.name, ['<','>']), ' ', limit=2)[2])
     path = abspath(filepath[1])
     file = filepath[2]
+    
     # Read the header
     header = read_bdf_header(fid)
 
     if onlyHeader
         return header
     else
+        # Read the data
         data = read_bdf_data(fid, header, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, digital)
         return BDF(header, data, path, file)
     end
 end
 
 function read_bdf_header(fid::IO)
+    # Read the general recording data
     idCodeNonASCII =    Int32(read(fid, UInt8))
     idCode =            decodeString(fid, 7)
     subID =             decodeString(fid, 80)
@@ -57,7 +62,7 @@ function read_bdf_header(fid::IO)
     physDim, physMin, physMax, digMin, digMax, prefilt, nSampRec, reserved)
 end
 
-# Helper functions for decoding string and numerical entries
+# Helper functions for decoding string and numerical header entries
 decodeString(fid, size) = ascii(String(read!(fid, Array{UInt8}(undef, size))))
 decodeNumber(fid, size) = parse(Int32, ascii(String(read!(fid, Array{UInt8}(undef, size)))))
 
@@ -108,6 +113,7 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
     chans = setdiff(chans, pick_channels(chanIgnore, header))
     if readStatus chans = check_status(chans, header) end
 
+    # Update the header to reflect the subset of read data.
     update_header!(header, chans)
 
     raw = Mmap.mmap(fid);
@@ -224,6 +230,7 @@ function check_status(chans, header)
     end
 end
 
+# Function to update header to reflect the subset of data actually read.
 function update_header!(header::BDFHeader, chans)
     header.nBytes = (length(chans)+1)*256
     header.nChannels = length(chans)

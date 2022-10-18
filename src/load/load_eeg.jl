@@ -1,7 +1,6 @@
 # TODO: cover cases when user wants to read vhdr or vmrk file instead of eeg
 # TODO: read data and markers from files stated in vhdr file
 # TODO: check correctness with other files
-# TODO: add necessary comments to file
 # TODO: allow for selection of channels / timespan
 # TODO: allow for different precision of output e.g. Float64
 
@@ -13,13 +12,16 @@ end
 
 function read_eeg(fid::IO; onlyHeader=false)
 
+    # Preserve the path and the name of file
     filepath = splitdir(split(strip(fid.name, ['<','>']), ' ', limit=2)[2])
     path = abspath(filepath[1])
     file = filepath[2]
 
+    # Assume all files share the same name and have proper extensions
     header_file = rsplit(file,'.', limit=2)[1] * ".vhdr"
     marker_file = rsplit(file,'.', limit=2)[1] * ".vmrk"
 
+    # Read the header
     header = read_eeg_header(joinpath(path, header_file))
 
     if onlyHeader
@@ -31,6 +33,7 @@ function read_eeg(fid::IO; onlyHeader=false)
     end
 end
 
+# Read the info from vhdr file
 function read_eeg_header(f::String)
     header = EEGHeader(Dict(), Any, Dict(), Dict(), 0)
     open(f) do fid
@@ -62,6 +65,7 @@ function read_eeg_header(f::String)
     return header
 end
 
+# Functions to parse specfic parts of vhdr file
 function parse_common(fid)
     info = Dict()
     line = readline(fid)
@@ -132,6 +136,7 @@ function parse_coordinates(fid)
     return coords
 end
 
+# Count how big is the comment section
 function parse_comments(fid)
     comment_lines = 0
     while !eof(fid)
@@ -141,6 +146,7 @@ function parse_comments(fid)
     return comment_lines
 end
 
+# Read markers from vmrk file
 function read_eeg_markers(f::String)
     markers = EEGMarkers(Dict())
     open(f) do fid
@@ -155,6 +161,7 @@ function read_eeg_markers(f::String)
     return markers
 end
 
+# Parse lines from vmrk file
 function parse_markers(fid)
     markers = Vector{Vector{String}}()
     line = readline(fid)
@@ -180,6 +187,7 @@ function parse_markers(fid)
     return marks
 end
 
+# Read the sensor data from eeg file
 function read_eeg_data(fid::IO, header::EEGHeader)
     if header.binary == Int16
         bytes = 2
@@ -202,12 +210,14 @@ function read_eeg_data(fid::IO, header::EEGHeader)
     return data
 end
 
+# Covert data from Int16 format
 function convert_data!(raw::Array{Int16}, data::Array, samples::Integer, resolution::Vector{Float32})
     Threads.@threads for sample=1:samples
         @inbounds @views data[sample,:] .= Float32.(raw[:,sample]) .* resolution
     end
 end
 
+# Covert data from Float32 format
 function convert_data!(raw::Array{Float32}, data::Array, samples::Integer, resolution::Vector{Float32})
     Threads.@threads for sample=1:samples
         @inbounds @views data[sample,:] .= raw[:,sample] .* resolution
