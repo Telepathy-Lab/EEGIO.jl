@@ -7,10 +7,15 @@ mutable struct EEGHeader
 end
 
 mutable struct EEGMarkers
-    markers::Dict
+    number::Vector{Int32}
+    type::Vector{String}
+    description::Vector{String}
+    position::Vector{Int32}
+    duration::Vector{Int32}
+    chanNum::Vector{Int32}
 end
 
-struct EEG
+mutable struct EEG <: EEGData
     header::EEGHeader
     markers::EEGMarkers
     data::Matrix
@@ -19,5 +24,6 @@ struct EEG
 end
 
 Base.show(io::IO, eeg::EEGHeader) = print(io, "EEG Header")
+Base.show(io::IO, eeg::EEGMarkers) = print(io, "EEG Markers")
 Base.show(io::IO, eeg::EEG) = print(io, "EEG file")
 Base.show(io::IO, ::Type{EEG}) = print(io, "EEG")

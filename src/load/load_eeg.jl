@@ -27,9 +27,9 @@ function read_eeg(fid::IO; onlyHeader=false)
     if onlyHeader
         return header
     else
-        marker = read_eeg_markers(joinpath(path, marker_file))
+        markers = read_eeg_markers(joinpath(path, marker_file))
         data = read_eeg_data(fid, header)
-        return EEG(header, marker, data, path, file)
+        return EEG(header, markers, data, path, file)
     end
 end
 
@@ -148,17 +148,15 @@ end
 
 # Read markers from vmrk file
 function read_eeg_markers(f::String)
-    markers = EEGMarkers(Dict())
     open(f) do fid
         while !eof(fid)
             line = readline(fid)
         
             if occursin("[Marker Infos]", line)
-                markers.markers = parse_markers(fid)
+                return parse_markers(fid)
             end
         end
     end
-    return markers
 end
 
 # Parse lines from vmrk file
@@ -176,15 +174,15 @@ function parse_markers(fid)
     end
 
     markers = reduce(hcat,markers)
-    marks = Dict(
-        "number" => parse.(Int32, replace.(markers[1,:],"Mk"=>"")),
-        "type" => markers[2,:],
-        "description" => markers[3,:],
-        "position" => parse.(Int32, replace(markers[4,:], "" => "NaN")),
-        "duration" => parse.(Int32, replace(markers[5,:], "" => "NaN")),
-        "chanNum" => parse.(Int32, replace(markers[6,:], "" => "NaN")),
-    )
-    return marks
+
+    number = parse.(Int32, replace.(markers[1,:],"Mk"=>""))
+    type = markers[2,:]
+    description = markers[3,:]
+    position = parse.(Int32, replace(markers[4,:], "" => "NaN"))
+    duration = parse.(Int32, replace(markers[5,:], "" => "NaN"))
+    chanNum = parse.(Int32, replace(markers[6,:], "" => "NaN"))
+
+    return EEGMarkers(number, type, description, position, duration, chanNum)
 end
 
 # Read the sensor data from eeg file
