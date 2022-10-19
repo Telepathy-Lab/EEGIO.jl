@@ -78,10 +78,10 @@ end
 
 # Helper function to decode channel specific numerical entries
 function decodeChanNumbers(fid, nChannels, size)
-    arr = Array{Float32}(undef, nChannels)
+    arr = Array{Int32}(undef, nChannels)
     buf = read(fid, nChannels*size)
     for i=1:nChannels
-        @inbounds arr[i] = parse(Int, ascii(String(buf[(size*(i-1)+1):(size*i)])))
+        @inbounds arr[i] = parse(Int32, ascii(String(buf[(size*(i-1)+1):(size*i)])))
     end
     return arr
 end
@@ -148,7 +148,7 @@ function pick_records(records::Tuple{AbstractFloat, AbstractFloat}, header)
     dur =  header.recordDuration
     signalTime = header.nDataRecords * dur
     if 0 <= records[1] && records[2] <= signalTime
-        return Int64(floor(records[1]/dur)+1):Int64(ceil(records[2]/dur))
+        return Int64(floor(records[1]/dur)):Int64(ceil(records[2]/dur))
     else
         error("Time range $records does not fit the available length of the data: $signalTime")
     end
