@@ -40,15 +40,15 @@ function read_eeg_header(f::String)
         while !eof(fid)
             line = readline(fid)
         
-            if occursin("[Common Infos]", line)
+            if occursin(r"\[Common .nfos\]", line)
                 header.common = parse_common(fid)
             end
         
-            if occursin("[Binary Infos]", line)
+            if occursin(r"\[Binary .nfos\]", line)
                 header.binary = parse_binary(fid)
             end
         
-            if occursin("[Channel Infos]", line)
+            if occursin(r"\[Channel .nfos\]", line)
                 header.channels = parse_channels(fid)
             end
         
@@ -151,8 +151,7 @@ function read_eeg_markers(f::String)
     open(f) do fid
         while !eof(fid)
             line = readline(fid)
-        
-            if occursin("[Marker Infos]", line)
+            if occursin(r"\[Marker .nfos\]", line)
                 return parse_markers(fid)
             end
         end
@@ -163,13 +162,14 @@ end
 function parse_markers(fid)
     markers = Vector{Vector{String}}()
     line = readline(fid)
+    @info "I read line $line"
     while !isempty(line)
         if line[1] != ';'
             push!(markers, split(line,['=',',']))
         end
         line = readline(fid)
     end
-    if length(markers[1]) > length(markers[2])
+    if length(markers[1]) > 6#length(markers[2])
         date = pop!(markers[1])
     end
 
