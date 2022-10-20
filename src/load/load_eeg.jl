@@ -17,9 +17,16 @@ function read_eeg(fid::IO; onlyHeader=false)
     path = abspath(filepath[1])
     file = filepath[2]
 
-    # Assume all files share the same name and have proper extensions
-    header_file = rsplit(file,'.', limit=2)[1] * ".vhdr"
-    marker_file = rsplit(file,'.', limit=2)[1] * ".vmrk"
+    # Assume header file shares the same name and check it for proper extension
+    fName = rsplit(file,'.', limit=2)[1]
+    @info path, file, fName
+    if isfile(joinpath(path, fName * ".vhdr"))
+        header_file = fName * ".vhdr"
+    elseif isfile(joinpath(path, fName * ".ahdr"))
+        header_file = fName * ".ahdr"
+    else
+        error("Cannot find header file for $fName")
+    end
 
     # Read the header
     header = read_eeg_header(joinpath(path, header_file))
@@ -27,7 +34,12 @@ function read_eeg(fid::IO; onlyHeader=false)
     if onlyHeader
         return header
     else
-        markers = read_eeg_markers(joinpath(path, marker_file))
+        if isfile(joinpath(path, header.common["MarkerFile"]))
+            markers = read_eeg_markers(joinpath(path, header.common["MarkerFile"]))
+        else
+            @warn "No marker file found under name $(header.common["MarkerFile"])"
+            markers = EEGMarkers([],[],[],[],[],[])
+        end
         data = read_eeg_data(fid, header)
         return EEG(header, markers, data, path, file)
     end
@@ -112,10 +124,12 @@ function parse_channels(fid)
         "number" => parse.(Int32, replace.(channels[1,:],"Ch"=>"")),
         "name" => channels[2,:],
         "reference" => channels[3,:],
-        "resolution" => parse.(Float32, replace(channels[4,:], "" => "NaN"))
+        "resolution" => parse.(Float32, replace(channels[4,:], "" => "1"))
     )
     if size(channels)[1] == 5
         chans["unit"] = channels[5,:]
+    elseif size(channels)[1] == 4
+        chans["unit"] = "µV"
     end
     return chans, line
 end
@@ -194,6 +208,7 @@ function read_eeg_data(fid::IO, header::EEGHeader)
     elseif header.binary == Float32
         bytes = 4
     end
+    
     size = Int32(position(seekend(fid))/bytes)
     seekstart(fid)
 
