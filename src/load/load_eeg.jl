@@ -34,6 +34,8 @@ function read_eeg(fid::IO; onlyHeader=false)
 end
 
 # Read the info from vhdr file
+# Parsing functions return the line they stopped at in a hackish attmpt to account
+# for header files without empty line between sections.
 function read_eeg_header(f::String)
     header = EEGHeader(Dict(), Any, Dict(), Dict(), 0)
     open(f) do fid
@@ -41,7 +43,7 @@ function read_eeg_header(f::String)
             line = readline(fid)
         
             if occursin(r"\[Common .nfos\]", line)
-                header.common = parse_common(fid)
+                header.common, line = parse_common(fid)
             end
         
             if occursin(r"\[Binary .nfos\]", line)
@@ -49,14 +51,15 @@ function read_eeg_header(f::String)
             end
         
             if occursin(r"\[Channel .nfos\]", line)
-                header.channels = parse_channels(fid)
+                header.channels, line = parse_channels(fid)
             end
         
             if occursin("[Coordinates]", line)
-                header.coords = parse_coordinates(fid)
+                header.coords, line = parse_coordinates(fid)
             end
         
             if occursin("[Comment]", line)
+                @info "$line"
                 header.comments = parse_comments(fid)
                 #println("Header contains additionally $(header.comments) lines of comments.")
             end
@@ -69,7 +72,7 @@ end
 function parse_common(fid)
     info = Dict()
     line = readline(fid)
-    while !isempty(line)
+    while !isempty(line) && line[1] != '['
         if line[1] != ';'
             key, value = split(line, '=')
             if occursin(key, "NumberOfChannels") || occursin(key, "SamplingInterval")
@@ -79,7 +82,7 @@ function parse_common(fid)
         end
         line = readline(fid)
     end
-    return info
+    return info, line
 end
 
 function parse_binary(fid)
@@ -98,7 +101,7 @@ end
 function parse_channels(fid)
     channels = Vector{Vector{String}}()
     line = readline(fid)
-    while !isempty(line)
+    while !isempty(line) && line[1] != '['
         if line[1] != ';'
             push!(channels, split(line,['=',',']))
         end
@@ -114,13 +117,13 @@ function parse_channels(fid)
     if size(channels)[1] == 5
         chans["unit"] = channels[5,:]
     end
-    return chans
+    return chans, line
 end
 
 function parse_coordinates(fid)
     coordinates = Vector{Vector{String}}()
     line = readline(fid)
-    while !isempty(line)
+    while !isempty(line) && line[1] != '['
         if line[1] != ';'
             push!(coordinates, split(line,['=',',']))
         end
@@ -133,7 +136,7 @@ function parse_coordinates(fid)
         "theta" => parse.(Float64, replace(coordinates[3,:], "" => "NaN")),
         "phi" => parse.(Float64, replace(coordinates[4,:], "" => "NaN"))
     )
-    return coords
+    return coords, line
 end
 
 # Count how big is the comment section
@@ -162,7 +165,6 @@ end
 function parse_markers(fid)
     markers = Vector{Vector{String}}()
     line = readline(fid)
-    @info "I read line $line"
     while !isempty(line)
         if line[1] != ';'
             push!(markers, split(line,['=',',']))
