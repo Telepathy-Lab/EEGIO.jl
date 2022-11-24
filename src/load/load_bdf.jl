@@ -31,6 +31,11 @@ function read_bdf(fid::IO; onlyHeader=false, addOffset=true, numPrecision=Float6
     end
 end
 
+"""
+    read_bdf_header(::IO)
+
+Read the header of a BDF file.
+"""
 function read_bdf_header(fid::IO)
     # Read the general recording data
     idCodeNonASCII =    Int32(read(fid, UInt8))

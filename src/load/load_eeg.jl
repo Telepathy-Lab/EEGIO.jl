@@ -48,6 +48,11 @@ end
 # Read the info from vhdr file
 # Parsing functions return the line they stopped at in a hackish attmpt to account
 # for header files without empty line between sections.
+"""
+    read_eeg_header(::String)
+
+Reader the EEG header based on the name of file. 
+"""
 function read_eeg_header(f::String)
     header = EEGHeader(Dict(), Any, Dict(), Dict(), 0)
     open(f) do fid
