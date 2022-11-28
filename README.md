@@ -1,6 +1,6 @@
 # EEGIO
 
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://Telepathy-Software.github.io/EEGIO.jl/stable/)
+[![Dev](https://img.shields.io/badge/docs-stable-blue.svg)](https://Telepathy-Software.github.io/EEGIO.jl/dev/)
 
 [![CI](https://github.com/Telepathy-Software/EEGIO.jl/workflows/CI/badge.svg)](https://github.com/Telepathy-Software/EEGIO.jl/actions?query=workflow%3ACI)
 [![Codecov](https://codecov.io/gh/Telepathy-Software/EEGIO.jl/branch/main/graph/badge.svg?token=UZBX0PYSZU)](https://codecov.io/gh/Telepathy-Software/EEGIO.jl)

@@ -72,9 +72,7 @@ function write_eeg_header(fid::IO, filename::String, header::EEGHeader)
 end
 
 # Writing the marker information
-function write_eeg_markers(fid::IO, filename::String, marks::EEGMarkers)
-    markers = marks.markers
-
+function write_eeg_markers(fid::IO, filename::String, markers::EEGMarkers)
     println(fid, """
     Brain Vision Data Exchange Marker File, Version 1.0
     """)
