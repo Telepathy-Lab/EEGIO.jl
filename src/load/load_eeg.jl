@@ -93,7 +93,7 @@ function parse_common(fid)
         if line[1] != ';'
             key, value = split(line, '=')
             if occursin(key, "NumberOfChannels") || occursin(key, "SamplingInterval")
-                value = parse(Int32, value)
+                value = parse(Int, value)
             end
             info[key] = value
         end
@@ -126,10 +126,10 @@ function parse_channels(fid)
     end
     channels = reduce(hcat,channels)
     chans = Dict(
-        "number" => parse.(Int32, replace.(channels[1,:],"Ch"=>"")),
+        "number" => parse.(Int, replace.(channels[1,:],"Ch"=>"")),
         "name" => channels[2,:],
         "reference" => channels[3,:],
-        "resolution" => parse.(Float32, replace(channels[4,:], "" => "1"))
+        "resolution" => parse.(Float64, replace(channels[4,:], "" => "1"))
     )
     if size(channels)[1] == 5
         chans["unit"] = channels[5,:]
@@ -150,7 +150,7 @@ function parse_coordinates(fid)
     end
     coordinates = reduce(hcat,coordinates)
     coords = Dict(
-        "number" => parse.(Int32, replace.(coordinates[1,:],"Ch"=>"")),
+        "number" => parse.(Int, replace.(coordinates[1,:],"Ch"=>"")),
         "radius" => parse.(Float64, replace(coordinates[2,:], "" => "NaN")),
         "theta" => parse.(Float64, replace(coordinates[3,:], "" => "NaN")),
         "phi" => parse.(Float64, replace(coordinates[4,:], "" => "NaN"))
@@ -196,12 +196,12 @@ function parse_markers(fid)
 
     markers = reduce(hcat,markers)
 
-    number = parse.(Int32, replace.(markers[1,:],"Mk"=>""))
+    number = parse.(Int, replace.(markers[1,:],"Mk"=>""))
     type = markers[2,:]
     description = markers[3,:]
-    position = parse.(Int32, replace(markers[4,:], "" => "NaN"))
-    duration = parse.(Int32, replace(markers[5,:], "" => "NaN"))
-    chanNum = parse.(Int32, replace(markers[6,:], "" => "NaN"))
+    position = parse.(Int, replace(markers[4,:], "" => "NaN"))
+    duration = parse.(Int, replace(markers[5,:], "" => "NaN"))
+    chanNum = parse.(Int, replace(markers[6,:], "" => "NaN"))
 
     return EEGMarkers(number, type, description, position, duration, chanNum)
 end
@@ -214,7 +214,7 @@ function read_eeg_data(fid::IO, header::EEGHeader)
         bytes = 4
     end
     
-    size = Int32(position(seekend(fid))/bytes)
+    size = Int(position(seekend(fid))/bytes)
     seekstart(fid)
 
     channels = length(header.channels["name"])
@@ -231,14 +231,14 @@ function read_eeg_data(fid::IO, header::EEGHeader)
 end
 
 # Covert data from Int16 format
-function convert_data!(raw::Array{Int16}, data::Array, samples::Integer, resolution::Vector{Float32})
+function convert_data!(raw::Array{Int16}, data::Array, samples::Integer, resolution::Vector{Float64})
     Threads.@threads for sample=1:samples
         @inbounds @views data[sample,:] .= Float32.(raw[:,sample]) .* resolution
     end
 end
 
 # Covert data from Float32 format
-function convert_data!(raw::Array{Float32}, data::Array, samples::Integer, resolution::Vector{Float32})
+function convert_data!(raw::Array{Float32}, data::Array, samples::Integer, resolution::Vector{Float64})
     Threads.@threads for sample=1:samples
         @inbounds @views data[sample,:] .= raw[:,sample] .* resolution
     end

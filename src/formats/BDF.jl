@@ -1,24 +1,24 @@
 mutable struct BDFHeader
-    idCodeNonASCII::Int32
+    idCodeNonASCII::Int
     idCode::String
     subID::String
     recID::String
     startDate::String
     startTime::String
-    nBytes::Int32
+    nBytes::Int
     versionDataFormat::String
-    nDataRecords::Int32
-    recordDuration::Int32
-    nChannels::Int32
+    nDataRecords::Int
+    recordDuration::Int
+    nChannels::Int
     chanLabels::Vector{String}
     transducer::Vector{String}
     physDim::Vector{String}
-    physMin::Vector{Int32}
-    physMax::Vector{Int32}
-    digMin::Vector{Int32}
-    digMax::Vector{Int32}
+    physMin::Vector{Int}
+    physMax::Vector{Int}
+    digMin::Vector{Int}
+    digMax::Vector{Int}
     prefilt::Vector{String}
-    nSampRec::Vector{Int32}
+    nSampRec::Vector{Int}
     reserved::Vector{String}
 end
 

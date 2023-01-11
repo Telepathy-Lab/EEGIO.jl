@@ -3,16 +3,16 @@ mutable struct EEGHeader
     binary::Type
     channels::Dict
     coords::Dict
-    comments::Int64
+    comments::Int
 end
 
 mutable struct EEGMarkers
-    number::Vector{Int32}
+    number::Vector{Int}
     type::Vector{String}
     description::Vector{String}
-    position::Vector{Int32}
-    duration::Vector{Int32}
-    chanNum::Vector{Int32}
+    position::Vector{Int}
+    duration::Vector{Int}
+    chanNum::Vector{Int}
 end
 
 mutable struct EEG <: EEGData

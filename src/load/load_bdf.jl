@@ -38,7 +38,7 @@ Read the header of a BDF file.
 """
 function read_bdf_header(fid::IO)
     # Read the general recording data
-    idCodeNonASCII =    Int32(read(fid, UInt8))
+    idCodeNonASCII =    Int(read(fid, UInt8))
     idCode =            decodeString(fid, 7)
     subID =             decodeString(fid, 80)
     recID =             decodeString(fid, 80)
@@ -68,8 +68,8 @@ function read_bdf_header(fid::IO)
 end
 
 # Helper functions for decoding string and numerical header entries
-decodeString(fid, size) = ascii(String(read!(fid, Array{UInt8}(undef, size))))
-decodeNumber(fid, size) = parse(Int32, ascii(String(read!(fid, Array{UInt8}(undef, size)))))
+decodeString(fid, size) = strip(ascii(String(read!(fid, Array{UInt8}(undef, size)))))
+decodeNumber(fid, size) = parse(Int, ascii(String(read!(fid, Array{UInt8}(undef, size)))))
 
 # Helper function to decode channel specific string entries
 function decodeChanStrings(fid, nChannels, size)
@@ -83,10 +83,10 @@ end
 
 # Helper function to decode channel specific numerical entries
 function decodeChanNumbers(fid, nChannels, size)
-    arr = Array{Int32}(undef, nChannels)
+    arr = Array{Int}(undef, nChannels)
     buf = read(fid, nChannels*size)
     for i=1:nChannels
-        @inbounds arr[i] = parse(Int32, ascii(String(buf[(size*(i-1)+1):(size*i)])))
+        @inbounds arr[i] = parse(Int, ascii(String(buf[(size*(i-1)+1):(size*i)])))
     end
     return arr
 end
@@ -94,7 +94,7 @@ end
 # Read the EEG data points to a preallocated array.
 function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, digital)
     nChannels = header.nChannels
-    srate = Int32(header.nSampRec[1] / header.recordDuration)
+    srate = Int(header.nSampRec[1] / header.recordDuration)
     scaleFactor = numPrecision.(header.physMax-header.physMin)./(header.digMax-header.digMin)
 
     #=
@@ -107,9 +107,9 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
     It can be switched off through setting the parameter offset=false.
     =#
     if addOffset
-        offset = Float32.(header.physMin .- (header.digMin .* scaleFactor))
+        offset = Float64.(header.physMin .- (header.digMin .* scaleFactor))
     else
-        offset = Int32.(header.physMin .* 0)
+        offset = Int.(header.physMin .* 0)
     end
     
     # Limiting the number of channels and records to a requested subset.
@@ -172,9 +172,9 @@ function pick_records(records::Any, header)
 end
 
 # Picking the channels to load trough indices, ranges, or labels from the header.
-function pick_channels(channels::Integer, header)
-    if channels in 1:header.nChannels
-        return channels
+function pick_channels(channel::Integer, header)
+    if channel in 1:header.nChannels
+        return channel
     else
         error("No channel number $channel available. File contains only $(header.nChannels) channels.")
     end
@@ -235,7 +235,7 @@ function check_status(chans, header)
     end
 end
 
-# Function to update header to reflect the subset of data actually read.
+# Function to update the header to reflect the subset of data actually read.
 function update_header!(header::BDFHeader, chans)
     header.nBytes = (length(chans)+1)*256
     header.nChannels = length(chans)
