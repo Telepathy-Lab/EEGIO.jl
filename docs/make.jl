@@ -3,6 +3,11 @@ push!(LOAD_PATH,"../src/")
 using Documenter, EEGIO
 
 makedocs(;
+    format = Documenter.HTML(
+            assets = [
+                asset("assets/favicon.ico", islocal=true), 
+            ]
+        ),
     pages=[
         "Home" => "index.md",
         "Formats" => Any[
