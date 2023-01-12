@@ -1,11 +1,10 @@
 # EEGIO
 
 [![Dev](https://img.shields.io/badge/docs-stable-blue.svg)](https://Telepathy-Software.github.io/EEGIO.jl/dev/)
-
 [![CI](https://github.com/Telepathy-Software/EEGIO.jl/workflows/CI/badge.svg)](https://github.com/Telepathy-Software/EEGIO.jl/actions?query=workflow%3ACI)
 [![Codecov](https://codecov.io/gh/Telepathy-Software/EEGIO.jl/branch/main/graph/badge.svg?token=UZBX0PYSZU)](https://codecov.io/gh/Telepathy-Software/EEGIO.jl)
 
-Julia library for reading and writing EEG data.  
+Julia package for reading and writing EEG data.  
 Designed to be compatible with [`FileIO`](https://github.com/JuliaIO/FileIO.jl) interface, but can be used separately.
 
 EEGIO serves as an IO backend for [`Telepathy.jl`](https://github.com/Telepathy-Software/Telepathy.jl).
@@ -16,6 +15,6 @@ The main goal is to support reading and writing of all file formats included in 
 ## Version 1.0 roadmap:
 - [x] BDF read and write
 - [ ] EDF read and write
-- [x] EEG read and write
+- [x] BrainVision read and write
 - [ ] EEGLab read and write
-- [ ] BDF+ and EDF+ extension
+- [ ] BDF+ and EDF+ extensions

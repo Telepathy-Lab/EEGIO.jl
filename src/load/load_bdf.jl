@@ -1,6 +1,65 @@
 # TODO: Make sure channel/range selection also corrects the appropriate header fields
 
-# Public function to use without FileIO 
+"""
+    read_bdf(f::String; kwargs...)
+
+Read data from a BDF file.
+
+Providing a string containing valid path to a .bdf file will result in reading the data
+as a Float64 matrix with an added offset. Behavior of the function can be altered through
+additional keyword arguments listed below. Please consult the online documentation for
+a more thorough explanation of different options.
+
+## Arguments:
+- `f::String`
+    - Path to the BDF file to be read.
+
+## Keywords:
+- `onlyHeader::Bool=false`
+    - Indicates whether to read the header information with data points or just the header.
+- `addOffset::Bool=true`
+    - Whether to add constant offset to data points to compensate for asymmetric digitalization
+      done by the amplifier. This setting differs between software. Defaults to `true`.
+- `numPrecision::Type=Float64`
+    - Specifies the numerical type of the data. Data points in BDF files are stored as signed
+      24-bit integers, therefore can be read as types with higher bit count per number.
+      Possible tested options: `Float32`, `Float64`, `Int32`, `Int64`. Since there is no clear
+      benefit (except amount of memory used) to using smaller number, the default is set to 
+      `Float64`.
+- `chanSelect::Union{Int, Range, Vector{Int}, String, Vector{String}, Regex, Symbol}=:All`
+    - Specifies the subset of channels to read from the data. Depending on the provided value
+      you can select different subsets of channels.
+      Using integers (either single number, range, or a vector) will select channels by their
+      position in the data (e.g. chanSelect=[1,4,8], will pick the first, fourth, and eighth).
+      Using strings or regex expression will pick all the channels with matching names stored
+      in the header.
+      Finally, you can provide symbols :None or :All to read neither or every channel available.
+      Default is set to :All.
+- `chanIgnore::Union{Int, UnitRange, Vector{Int}, String, Vector{String}, Regex, Symbol}=:None`
+    - Specifies the subset of channel to omit while reading the data.
+      Uses the same selectors as `chanSelect` and picked values are subtracted from the set
+      of electrodes chosen by `chanSelect`. Default is set to :None.
+- `timeSelect::Union{Int, UnitRange, Tuple{AbstractFloat}, Symbol}=:All`
+    - Specifies the part of the time course of the data to be read.
+      BDF files are read one record at a time (just as they are written), so the user can
+      indicate which records to read.
+      Using integers will select records with those indexes in the data.
+      Using a tuple of floats will be interpreted as start and stop values in seconds
+      and all records that fit this time span will be read.
+      Using Symbol :All will read every record in the file. This is also the default.
+- `readStatus::Bool=true`
+    - Specifies if the Status channel should be read. As this is a special channel,
+      always placed at the end of the file and carrying trigger information along with some
+      technical data about the hardware setup, this setting provides an option to ignore it.
+      Please be aware, that its absence might generate errors in code that expects it (even
+      if it is empty). Default is set to true. 
+
+Current implementation follows closely the specification formulated by [BioSemi]
+(https://www.biosemi.com/faq/file_format.htm) that extends EDF format from 16 to 24-bit.
+Therefore it will read only data produced by BioSemi equipment and software compliant with
+the specification.
+BDF+ extension is not yet implemented.
+"""
 function read_bdf(f::String; onlyHeader=false, addOffset=true, numPrecision=Float64,
     chanSelect=:All, chanIgnore=:None, timeSelect=:All, readStatus=true, digital=false)
     # Open file
@@ -99,8 +158,8 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
 
     #=
     Addition of offset value to data points seems to be a legacy from reading EDF files that
-    have physical or digital values not distributed symetrically around zero. Biosemi system
-    is symetrical, so adding the offset has no real impact and can be skipped. See here:
+    have physical or digital values not distributed symmetrically around zero. Biosemi system
+    is symmetrical, so adding the offset has no real impact and can be skipped. See here:
     http://www.biosemi.nl/forum/viewtopic.php?f=4&t=1520&sid=ba7f775f06adbaa165230fdf1ad55c1c
 
     However, for compatibility with other EEG software, adding offset is the default.

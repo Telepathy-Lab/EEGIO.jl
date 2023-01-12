@@ -5,8 +5,12 @@ using Documenter, EEGIO
 makedocs(;
     pages=[
         "Home" => "index.md",
-        "BDF" => "bdf.md",
-        "EEG" => "eeg.md",
+        "Formats" => Any[
+            "BDF (BioSemi)" => "formats/bdf.md",
+            "EEG (BrainVision)" => "formats/eeg.md",
+        ],
+        "Utilities" => "utils.md",
+        "Reference" => "reference.md",
     ],
     sitename="EEGIO",
     authors="Telepathy team",
