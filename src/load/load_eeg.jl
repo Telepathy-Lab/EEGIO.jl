@@ -4,13 +4,14 @@
 # TODO: allow for selection of channels / timespan
 # TODO: allow for different precision of output e.g. Float64
 
-function read_eeg(f::String; onlyHeader=false)
+function read_eeg(f::String; kwargs...)
     open(f) do fid
-        read_eeg(fid, onlyHeader=onlyHeader)
+        read_eeg(fid; kwargs...)
     end
 end
 
-function read_eeg(fid::IO; onlyHeader=false)
+function read_eeg(fid::IO; onlyHeader=false, onlyMarkers=false, numPrecision=Float64, 
+    chanSelect=:All, chanIgnore=:None, timeSelect=:All)
 
     # Preserve the path and the name of file
     filepath = splitdir(split(strip(fid.name, ['<','>']), ' ', limit=2)[2])
@@ -19,7 +20,7 @@ function read_eeg(fid::IO; onlyHeader=false)
 
     # Assume header file shares the same name and check it for proper extension
     fName = rsplit(file,'.', limit=2)[1]
-    @info path, file, fName
+    #@info path, file, fName
     if isfile(joinpath(path, fName * ".vhdr"))
         header_file = fName * ".vhdr"
     elseif isfile(joinpath(path, fName * ".ahdr"))
@@ -31,8 +32,14 @@ function read_eeg(fid::IO; onlyHeader=false)
     # Read the header
     header = read_eeg_header(joinpath(path, header_file))
 
+    if !(onlyHeader | onlyMarkers)
+        data = read_eeg_data(fid, header, numPrecision, chanSelect, chanIgnore, timeSelect)
+    else
+        data = Array{numPrecision}(undef, (0,0))
+    end
+    
     if onlyHeader
-        return header
+        markers = EEGMarkers([],[],[],[],[],[])
     else
         if isfile(joinpath(path, header.common["MarkerFile"]))
             markers = read_eeg_markers(joinpath(path, header.common["MarkerFile"]))
@@ -40,9 +47,9 @@ function read_eeg(fid::IO; onlyHeader=false)
             @warn "No marker file found under name $(header.common["MarkerFile"])"
             markers = EEGMarkers([],[],[],[],[],[])
         end
-        data = read_eeg_data(fid, header)
-        return EEG(header, markers, data, path, file)
     end
+
+    return EEG(header, markers, data, path, file)
 end
 
 # Read the info from vhdr file
@@ -76,7 +83,7 @@ function read_eeg_header(f::String)
             end
         
             if occursin("[Comment]", line)
-                @info "$line"
+                #@info "$line"
                 header.comments = parse_comments(fid)
                 #println("Header contains additionally $(header.comments) lines of comments.")
             end
@@ -207,7 +214,7 @@ function parse_markers(fid)
 end
 
 # Read the sensor data from eeg file
-function read_eeg_data(fid::IO, header::EEGHeader)
+function read_eeg_data(fid::IO, header::EEGHeader, numPrecision, chanSelect, chanIgnore, timeSelect)
     if header.binary == Int16
         bytes = 2
     elseif header.binary == Float32
@@ -217,29 +224,51 @@ function read_eeg_data(fid::IO, header::EEGHeader)
     size = Int(position(seekend(fid))/bytes)
     seekstart(fid)
 
-    channels = length(header.channels["name"])
-    samples = Int64(size/channels)
+    nDataChannels = length(header.channels["name"])
+    nDataSamples = Int64(size/nDataChannels)
     resolution = header.channels["resolution"]
 
-    raw = Mmap.mmap(fid, Matrix{header.binary}, (channels, samples))
-    data = Array{Float32}(undef, (samples, channels))
+    chans = pick_channels(chanSelect, nDataChannels, header.channels["name"])
+    chans = setdiff(chans, pick_channels(chanIgnore, nDataChannels, header.channels["name"]))
 
-    convert_data!(raw, data, samples, resolution)
+    #@info "Channel picks: $(header.channels["name"][chans]), $(length(chans))"
+
+    nChannels = length(chans)
+
+    raw = Mmap.mmap(fid, Matrix{header.binary}, (nDataChannels, nDataSamples))
+    data = Array{numPrecision}(undef, (nDataSamples, nChannels))
+
+    convert_data!(raw, data, nDataSamples, chans, resolution)
 
     finalize(raw)
     return data
 end
 
-# Covert data from Int16 format
-function convert_data!(raw::Array{Int16}, data::Array, samples::Integer, resolution::Vector{Float64})
+
+# Covert data to Float
+function convert_data!(raw::Array, data::Array{T}, samples, chans, resolution) where T <: AbstractFloat
     Threads.@threads for sample=1:samples
-        @inbounds @views data[sample,:] .= Float32.(raw[:,sample]) .* resolution
+        @inbounds @views data[sample,:] .= T.(raw[chans,sample]) .* resolution[chans]
     end
 end
 
-# Covert data from Float32 format
-function convert_data!(raw::Array{Float32}, data::Array, samples::Integer, resolution::Vector{Float64})
+# Promote data to bigger Int
+function convert_data!(raw::Array, data::Array{T}, samples, chans, resolution) where T <: Integer
     Threads.@threads for sample=1:samples
-        @inbounds @views data[sample,:] .= raw[:,sample] .* resolution
+        @inbounds @views data[sample,:] .= round.(T, raw[chans,sample] .* resolution[chans])
+    end
+end
+
+# Copy data as Float32 format
+function convert_data!(raw::Array{Float32}, data::Array{Float32}, samples, chans, resolution)
+    Threads.@threads for sample=1:samples
+        @inbounds @views data[sample,:] .= raw[chans,sample] .* resolution[chans]
+    end
+end
+
+# Copy data as Int16 format
+function convert_data!(raw::Array{Int16}, data::Array{Int16}, samples, chans, resolution)
+    Threads.@threads for sample=1:samples
+        @inbounds @views data[sample,:] .= raw[chans,sample]
     end
 end
