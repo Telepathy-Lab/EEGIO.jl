@@ -60,12 +60,10 @@ Therefore it will read only data produced by BioSemi equipment and software comp
 the specification.
 BDF+ extension is not yet implemented.
 """
-function read_bdf(f::String; onlyHeader=false, addOffset=true, numPrecision=Float64,
-    chanSelect=:All, chanIgnore=:None, timeSelect=:All, readStatus=true)
+function read_bdf(f::String; kwargs...)
     # Open file
     open(f) do fid
-        read_bdf(fid, onlyHeader=onlyHeader, addOffset=addOffset, numPrecision=numPrecision,
-        chanSelect=chanSelect, chanIgnore=chanIgnore, timeSelect=timeSelect, readStatus=readStatus)
+        read_bdf(fid; kwargs...)
     end
 end
 
@@ -172,9 +170,9 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
     end
     
     # Limiting the number of channels and records to a requested subset.
-    records = pick_records(timeSelect, header)
-    chans = pick_channels(chanSelect, header)
-    chans = setdiff(chans, pick_channels(chanIgnore, header))
+    records = pick_samples(timeSelect, header)
+    chans = pick_channels(chanSelect, header.nChannels, header.chanLabels)
+    chans = setdiff(chans, pick_channels(chanIgnore, header.nChannels, header.chanLabels))
     if readStatus chans = check_status(chans, header) end
 
     # Update the header to reflect the subset of read data.
@@ -187,97 +185,6 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
     finalize(raw)
     GC.gc(false)
     return data
-end
-
-# Picking the time interval to load, measured as number of records or seconds.
-function pick_records(records::Symbol, header)
-    if records == :All
-        return 1:header.nDataRecords
-    else
-        error("Unknown symbol :$records passed. Did You mean :All?")
-    end
-end
-
-function pick_records(records::Integer, header)
-    if 0 < records < header.nDataRecords
-        return records
-    else
-        error("Number of a record to read should be between 1 and $(header.nDataRecords). Got $records instead.")
-    end
-end
-
-function pick_records(records::Tuple{AbstractFloat, AbstractFloat}, header)
-    dur =  header.recordDuration
-    signalTime = header.nDataRecords * dur
-    if 0 <= records[1] && records[2] <= signalTime
-        return Int64(floor(records[1]/dur)):Int64(ceil(records[2]/dur))
-    else
-        error("Time range $records does not fit the available length of the data: $signalTime")
-    end
-end
-
-function pick_records(records::UnitRange{}, header)
-    if records[1] >= 1 && records[end] <= header.nDataRecords
-        return records
-    else
-        error("Range $records does not fit in the available $(header.nDataRecords) records.")
-    end
-end
-
-function pick_records(records::Any, header)
-    error("Selection of time interval \"$records\" should be a number, a range, or a list of indices.")
-end
-
-# Picking the channels to load trough indices, ranges, or labels from the header.
-function pick_channels(channel::Integer, header)
-    if channel in 1:header.nChannels
-        return channel
-    else
-        error("No channel number $channel available. File contains only $(header.nChannels) channels.")
-    end
-end
-
-function pick_channels(channels::UnitRange{}, header)
-    if channels[1] >= 1 && channels[end] <= header.nChannels
-        return channels
-    else
-        error("Range $channels does not fit in the available $(header.nChannels) channels.")
-    end
-end
-
-function pick_channels(channels::Union{String, Regex}, header)
-    picks = header.chanLabels[occursin.(channels, header.chanLabels)]
-    if isempty(picks)
-        error("No requested channel found in the data.")
-    end
-    return indexin(picks, header.chanLabels)
-end
-
-function pick_channels(channels::Vector{String}, header)
-    absent = (channels[channels .∉ [header.chanLabels]])
-    present = (channels[channels .∈ [header.chanLabels]])
-    picks = indexin(present, header.chanLabels)
-    if isempty(present)
-        error("No channel from the list found in the file.")
-    elseif !isempty(absent)
-        @warn "Selected channels $absent not found in file. 
-        Read only channels $present."
-    end
-    return picks
-end
-
-function pick_channels(channels::Symbol, header)
-    if channels == :All
-        return 1:header.nChannels
-    elseif channels == :None
-        return Int64[]
-    else
-        error("Unrecogniezed symbol $channels. Did you mean :All?")
-    end
-end
-
-function pick_channels(channels::Any, header)
-    error("Selection of channels \"$channels\" should be an integer, a range, or a list of channels.")
 end
 
 # Always include status channel unless explicitly stated otherwise
