@@ -61,17 +61,17 @@ the specification.
 BDF+ extension is not yet implemented.
 """
 function read_bdf(f::String; onlyHeader=false, addOffset=true, numPrecision=Float64,
-    chanSelect=:All, chanIgnore=:None, timeSelect=:All, readStatus=true, digital=false)
+    chanSelect=:All, chanIgnore=:None, timeSelect=:All, readStatus=true)
     # Open file
     open(f) do fid
         read_bdf(fid, onlyHeader=onlyHeader, addOffset=addOffset, numPrecision=numPrecision,
-        chanSelect=chanSelect, chanIgnore=chanIgnore, timeSelect=timeSelect, readStatus=readStatus, digital=digital)
+        chanSelect=chanSelect, chanIgnore=chanIgnore, timeSelect=timeSelect, readStatus=readStatus)
     end
 end
 
 # Internal function called by public API and FileIO
 function read_bdf(fid::IO; onlyHeader=false, addOffset=true, numPrecision=Float64,
-    chanSelect=:All, chanIgnore=:None, timeSelect=:All, readStatus=true, digital=false)
+    chanSelect=:All, chanIgnore=:None, timeSelect=:All, readStatus=true)
     
     # Preserve the path and the name of file
     filepath = splitdir(split(strip(fid.name, ['<','>']), ' ', limit=2)[2])
@@ -85,7 +85,7 @@ function read_bdf(fid::IO; onlyHeader=false, addOffset=true, numPrecision=Float6
         return header
     else
         # Read the data
-        data = read_bdf_data(fid, header, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, digital)
+        data = read_bdf_data(fid, header, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus)
         return BDF(header, data, path, file)
     end
 end
@@ -151,7 +151,7 @@ function decodeChanNumbers(fid, nChannels, size)
 end
 
 # Read the EEG data points to a preallocated array.
-function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, digital)
+function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus)
     nChannels = header.nChannels
     srate = Int(header.nSampRec[1] / header.recordDuration)
     scaleFactor = numPrecision.(header.physMax-header.physMin)./(header.digMax-header.digMin)
@@ -181,9 +181,7 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
     update_header!(header, chans)
 
     raw = Mmap.mmap(fid);
-    if digital
-        numPrecision = changeToInt(numPrecision)
-    end
+
     data = Array{numPrecision}(undef, (srate*length(records),length(chans)));
     convert_data!(raw, data, srate, records, chans, nChannels, scaleFactor, offset)
     finalize(raw)
@@ -308,14 +306,6 @@ function update_header!(header::BDFHeader, chans)
     header.prefilt = header.prefilt[chans]
     header.reserved = header.reserved[chans]
     header.nSampRec = header.nSampRec[chans]
-end
-
-function changeToInt(::Type{Float64})
-    return Int64
-end
-
-function changeToInt(::Type{Float32})
-    return Int32
 end
 
 # Loop through all segments for each channel
