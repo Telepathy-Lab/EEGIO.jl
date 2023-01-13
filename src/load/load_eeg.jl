@@ -1,8 +1,7 @@
 # TODO: cover cases when user wants to read vhdr or vmrk file instead of eeg
 # TODO: read data and markers from files stated in vhdr file
 # TODO: check correctness with other files
-# TODO: allow for selection of channels / timespan
-# TODO: allow for different precision of output e.g. Float64
+
 
 function read_eeg(f::String; kwargs...)
     open(f) do fid
@@ -231,14 +230,16 @@ function read_eeg_data(fid::IO, header::EEGHeader, numPrecision, chanSelect, cha
     chans = pick_channels(chanSelect, nDataChannels, header.channels["name"])
     chans = setdiff(chans, pick_channels(chanIgnore, nDataChannels, header.channels["name"]))
 
+    samples = pick_samples(timeSelect, nDataSamples, header)
     #@info "Channel picks: $(header.channels["name"][chans]), $(length(chans))"
 
     nChannels = length(chans)
+    nSamples = length(samples)
 
     raw = Mmap.mmap(fid, Matrix{header.binary}, (nDataChannels, nDataSamples))
-    data = Array{numPrecision}(undef, (nDataSamples, nChannels))
+    data = Array{numPrecision}(undef, (nSamples, nChannels))
 
-    convert_data!(raw, data, nDataSamples, chans, resolution)
+    convert_data!(raw, data, samples, chans, resolution)
 
     finalize(raw)
     return data
@@ -247,28 +248,28 @@ end
 
 # Covert data to Float
 function convert_data!(raw::Array, data::Array{T}, samples, chans, resolution) where T <: AbstractFloat
-    Threads.@threads for sample=1:samples
-        @inbounds @views data[sample,:] .= T.(raw[chans,sample]) .* resolution[chans]
+    Threads.@threads for (idx, sample) in collect(enumerate(samples))
+        @inbounds @views data[idx,:] .= T.(raw[chans,sample]) .* resolution[chans]
     end
 end
 
 # Promote data to bigger Int
 function convert_data!(raw::Array, data::Array{T}, samples, chans, resolution) where T <: Integer
-    Threads.@threads for sample=1:samples
-        @inbounds @views data[sample,:] .= round.(T, raw[chans,sample] .* resolution[chans])
+    Threads.@threads for (idx, sample) in collect(enumerate(samples))
+        @inbounds @views data[idx,:] .= round.(T, raw[chans,sample] .* resolution[chans])
     end
 end
 
 # Copy data as Float32 format
 function convert_data!(raw::Array{Float32}, data::Array{Float32}, samples, chans, resolution)
-    Threads.@threads for sample=1:samples
-        @inbounds @views data[sample,:] .= raw[chans,sample] .* resolution[chans]
+    Threads.@threads for (idx, sample) in collect(enumerate(samples))
+        @inbounds @views data[idx,:] .= raw[chans,sample] .* resolution[chans]
     end
 end
 
 # Copy data as Int16 format
 function convert_data!(raw::Array{Int16}, data::Array{Int16}, samples, chans, resolution)
-    Threads.@threads for sample=1:samples
-        @inbounds @views data[sample,:] .= raw[chans,sample]
+    Threads.@threads for (idx, sample) in collect(enumerate(samples))
+        @inbounds @views data[idx,:] .= raw[chans,sample]
     end
 end
