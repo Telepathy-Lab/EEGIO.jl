@@ -1,7 +1,7 @@
 # TODO: cover cases when user wants to read vhdr or vmrk file instead of eeg
 # TODO: read data and markers from files stated in vhdr file
 # TODO: check correctness with other files
-
+# TODO: Decide what to do with comment section - read it in or leave out?
 
 function read_eeg(f::String; kwargs...)
     open(f) do fid
@@ -19,7 +19,7 @@ function read_eeg(fid::IO; onlyHeader=false, onlyMarkers=false, numPrecision=Flo
 
     # Assume header file shares the same name and check it for proper extension
     fName = rsplit(file,'.', limit=2)[1]
-    #@info path, file, fName
+    
     if isfile(joinpath(path, fName * ".vhdr"))
         header_file = fName * ".vhdr"
     elseif isfile(joinpath(path, fName * ".ahdr"))
@@ -82,9 +82,7 @@ function read_eeg_header(f::String)
             end
         
             if occursin("[Comment]", line)
-                #@info "$line"
                 header.comments = parse_comments(fid)
-                #println("Header contains additionally $(header.comments) lines of comments.")
             end
         end
     end
@@ -196,7 +194,7 @@ function parse_markers(fid)
         end
         line = readline(fid)
     end
-    if length(markers[1]) > 6#length(markers[2])
+    if length(markers[1]) > 6
         date = pop!(markers[1])
     end
 
@@ -229,12 +227,12 @@ function read_eeg_data(fid::IO, header::EEGHeader, numPrecision, chanSelect, cha
 
     chans = pick_channels(chanSelect, nDataChannels, header.channels["name"])
     chans = setdiff(chans, pick_channels(chanIgnore, nDataChannels, header.channels["name"]))
+    nChannels = length(chans)
 
     samples = pick_samples(timeSelect, nDataSamples, header)
-    #@info "Channel picks: $(header.channels["name"][chans]), $(length(chans))"
-
-    nChannels = length(chans)
     nSamples = length(samples)
+
+    update_header!(header, chans)
 
     raw = Mmap.mmap(fid, Matrix{header.binary}, (nDataChannels, nDataSamples))
     data = Array{numPrecision}(undef, (nSamples, nChannels))
@@ -245,6 +243,17 @@ function read_eeg_data(fid::IO, header::EEGHeader, numPrecision, chanSelect, cha
     return data
 end
 
+function update_header!(header::EEGHeader, chans)
+    header.common["NumberOfChannels"] = length(chans)
+
+    for (key, val) in header.channels
+        header.channels[key] = val[chans]
+    end 
+
+    for (key, val) in header.coords
+        header.coords[key] = val[chans]
+    end 
+end
 
 # Covert data to Float
 function convert_data!(raw::Array, data::Array{T}, samples, chans, resolution) where T <: AbstractFloat
