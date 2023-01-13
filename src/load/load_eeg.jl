@@ -3,12 +3,66 @@
 # TODO: check correctness with other files
 # TODO: Decide what to do with comment section - read it in or leave out?
 
+"""
+    read_eeg(f::String; kwargs...)
+
+Read data from an EEG file.
+
+Providing a string containing valid path to a .eeg, .vhdr, or .vmrk file will result in 
+reading the data as a Float64 matrix (provided all files share their name). Behavior of 
+the function can be altered through additional keyword arguments listed below. Please 
+consult the online documentation for a more thorough explanation of different options.
+
+## Arguments:
+- `f::String`
+    - Path to the EEG file (either .eeg, .vhdr, or .vmrk) to be read.
+
+## Keywords:
+- `onlyHeader::Bool=false`
+    - Indicates whether to read the header information with data points or just the header.
+- `onlyMarkers::Bool=false`
+    - Indicates whether to read the data points or just the header and markers.
+- `numPrecision::Type=Float64`
+    - Specifies the numerical type of the data. Data points in EEG files are stored as 16-bit
+      integers or 32-bit floats, therefore can be read as types with higher bit count per number.
+      Possible tested options: `Float32`, `Float64`, `Int32`, `Int64`. Since there is no clear
+      benefit (except amount of memory used) to using smaller number, the default is set to 
+      `Float64`.
+- `chanSelect::Union{Int, Range, Vector{Int}, String, Vector{String}, Regex, Symbol}=:All`
+    - Specifies the subset of channels to read from the data. Depending on the provided value
+      you can select different subsets of channels.
+      Using integers (either single number, range, or a vector) will select channels by their
+      position in the data (e.g. chanSelect=[1,4,8], will pick the first, fourth, and eighth).
+      Using strings or regex expression will pick all the channels with matching names stored
+      in the header.
+      Finally, you can provide symbols :None or :All to read neither or every channel available.
+      Default is set to :All.
+- `chanIgnore::Union{Int, UnitRange, Vector{Int}, String, Vector{String}, Regex, Symbol}=:None`
+    - Specifies the subset of channel to omit while reading the data.
+      Uses the same selectors as `chanSelect` and picked values are subtracted from the set
+      of electrodes chosen by `chanSelect`. Default is set to :None.
+- `timeSelect::Union{Int, UnitRange, Tuple{AbstractFloat}, Symbol}=:All`
+    - Specifies the part of the time course of the data to be read.
+      Using integers will select samples with those indexes in the data.
+      Using a tuple of floats will be interpreted as start and stop values in seconds
+      and all samples that fit this time span will be read.
+      Using Symbol :All will read every sample in the file. This is also the default.
+
+
+Current implementation follows closely the specification formulated by [BrainVision]
+(https://www.brainproducts.com/download/specification-of-brainvision-core-data-format-1-0/).
+However the contents of the header and marker files can differ substantially, 
+even if recorded with BrainVision hardware. If your files are not read properly, open an
+issue on github and try to provide a sample dataset to reproduce the problem.
+"""
 function read_eeg(f::String; kwargs...)
+    # Open file
     open(f) do fid
         read_eeg(fid; kwargs...)
     end
 end
 
+# Internal function called by public API and FileIO
 function read_eeg(fid::IO; onlyHeader=false, onlyMarkers=false, numPrecision=Float64, 
     chanSelect=:All, chanIgnore=:None, timeSelect=:All)
 
@@ -31,6 +85,7 @@ function read_eeg(fid::IO; onlyHeader=false, onlyMarkers=false, numPrecision=Flo
     # Read the header
     header = read_eeg_header(joinpath(path, header_file))
 
+    # Read only header or header and markers if user asked for it.
     if !(onlyHeader | onlyMarkers)
         data = read_eeg_data(fid, header, numPrecision, chanSelect, chanIgnore, timeSelect)
     else
@@ -218,13 +273,16 @@ function read_eeg_data(fid::IO, header::EEGHeader, numPrecision, chanSelect, cha
         bytes = 4
     end
     
+    # Calculate the size of data (as it's not in the header)
     size = Int(position(seekend(fid))/bytes)
     seekstart(fid)
 
+    # Total number of channels and samples
     nDataChannels = length(header.channels["name"])
     nDataSamples = Int64(size/nDataChannels)
     resolution = header.channels["resolution"]
 
+    # Select a subset of channels/samples if user specified a narrower scope.
     chans = pick_channels(chanSelect, nDataChannels, header.channels["name"])
     chans = setdiff(chans, pick_channels(chanIgnore, nDataChannels, header.channels["name"]))
     nChannels = length(chans)
@@ -232,6 +290,7 @@ function read_eeg_data(fid::IO, header::EEGHeader, numPrecision, chanSelect, cha
     samples = pick_samples(timeSelect, nDataSamples, header)
     nSamples = length(samples)
 
+    # Update header to match the subset
     update_header!(header, chans)
 
     raw = Mmap.mmap(fid, Matrix{header.binary}, (nDataChannels, nDataSamples))
@@ -246,10 +305,12 @@ end
 function update_header!(header::EEGHeader, chans)
     header.common["NumberOfChannels"] = length(chans)
 
+    # Update channel specification count
     for (key, val) in header.channels
         header.channels[key] = val[chans]
     end 
 
+    # Update electrode coordinate count
     for (key, val) in header.coords
         header.coords[key] = val[chans]
     end 
