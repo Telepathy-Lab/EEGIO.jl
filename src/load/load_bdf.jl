@@ -175,7 +175,8 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
     chans = setdiff(chans, pick_channels(chanIgnore, header.nChannels, header.chanLabels))
     if readStatus chans = check_status(chans, header) end
 
-    # Update the header to reflect the subset of read data.
+    # Update the header to reflect the subset of data actually read.
+    update_header!(header, records)
     update_header!(header, chans)
 
     raw = Mmap.mmap(fid);
@@ -199,21 +200,6 @@ function check_status(chans, header)
     end
 end
 
-# Function to update the header to reflect the subset of data actually read.
-function update_header!(header::BDFHeader, chans)
-    header.nBytes = (length(chans)+1)*256
-    header.nChannels = length(chans)
-    header.chanLabels = header.chanLabels[chans]
-    header.transducer = header.transducer[chans]
-    header.physDim = header.physDim[chans]
-    header.physMin = header.physMin[chans]
-    header.physMax = header.physMax[chans]
-    header.digMax = header.digMax[chans]
-    header.digMin = header.digMin[chans]
-    header.prefilt = header.prefilt[chans]
-    header.reserved = header.reserved[chans]
-    header.nSampRec = header.nSampRec[chans]
-end
 
 # Loop through all segments for each channel
 function convert_data!(raw::Array{UInt8}, data, srate, records, chans, nChannels, scaleFactor, offset)

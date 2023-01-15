@@ -84,13 +84,6 @@ function read_eeg(fid::IO; onlyHeader=false, onlyMarkers=false, numPrecision=Flo
 
     # Read the header
     header = read_eeg_header(joinpath(path, header_file))
-
-    # Read only header or header and markers if user asked for it.
-    if !(onlyHeader | onlyMarkers)
-        data = read_eeg_data(fid, header, numPrecision, chanSelect, chanIgnore, timeSelect)
-    else
-        data = Array{numPrecision}(undef, (0,0))
-    end
     
     if onlyHeader
         markers = EEGMarkers([],[],[],[],[],[])
@@ -101,6 +94,13 @@ function read_eeg(fid::IO; onlyHeader=false, onlyMarkers=false, numPrecision=Flo
             @warn "No marker file found under name $(header.common["MarkerFile"])"
             markers = EEGMarkers([],[],[],[],[],[])
         end
+    end
+
+    # Read only header or header and markers if user asked for it.
+    if !(onlyHeader | onlyMarkers)
+        data = read_eeg_data(fid, header, markers, numPrecision, chanSelect, chanIgnore, timeSelect)
+    else
+        data = Array{numPrecision}(undef, (0,0))
     end
 
     return EEG(header, markers, data, path, file)
@@ -266,7 +266,7 @@ function parse_markers(fid)
 end
 
 # Read the sensor data from eeg file
-function read_eeg_data(fid::IO, header::EEGHeader, numPrecision, chanSelect, chanIgnore, timeSelect)
+function read_eeg_data(fid::IO, header::EEGHeader, markers::EEGMarkers, numPrecision, chanSelect, chanIgnore, timeSelect)
     if header.binary == Int16
         bytes = 2
     elseif header.binary == Float32
@@ -290,8 +290,9 @@ function read_eeg_data(fid::IO, header::EEGHeader, numPrecision, chanSelect, cha
     samples = pick_samples(timeSelect, nDataSamples, header)
     nSamples = length(samples)
 
-    # Update header to match the subset
+    # Update header and markers to match the subsets
     update_header!(header, chans)
+    update_markers!(markers, samples)
 
     raw = Mmap.mmap(fid, Matrix{header.binary}, (nDataChannels, nDataSamples))
     data = Array{numPrecision}(undef, (nSamples, nChannels))
@@ -302,19 +303,6 @@ function read_eeg_data(fid::IO, header::EEGHeader, numPrecision, chanSelect, cha
     return data
 end
 
-function update_header!(header::EEGHeader, chans)
-    header.common["NumberOfChannels"] = length(chans)
-
-    # Update channel specification count
-    for (key, val) in header.channels
-        header.channels[key] = val[chans]
-    end 
-
-    # Update electrode coordinate count
-    for (key, val) in header.coords
-        header.coords[key] = val[chans]
-    end 
-end
 
 # Covert data to Float
 function convert_data!(raw::Array, data::Array{T}, samples, chans, resolution) where T <: AbstractFloat
