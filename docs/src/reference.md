@@ -13,5 +13,5 @@ Pages = ["load_eeg.jl"]
 ## Utilities
 ```@autodocs
 Modules = [EEGIO]
-Pages = ["resize.jl"]
+Pages = ["pick_channels.jl", "pick_samples.jl", "resize.jl"]
 ```
