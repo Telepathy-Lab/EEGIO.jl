@@ -1,23 +1,24 @@
-# TODO: Build in a mechanism that chooses mmap if more threads available.
-# Or maybe just use mmap (because its faster, unless user ask for serial write)
-# TODO: add "overwrite" parameter?
 # TODO: add checks if data fits the physical/digital dimensions to be written into Int24
 
-function write_bdf(f::String, bdf::BDF)
+function write_bdf(f::String, bdf::BDF; overwrite=false, kwargs...)
     if isfile(f)
-        rm(f)
+        if overwrite
+            rm(f)
+        else
+            error("File $f already exists. Use `overwrite=true` to overwrite the file.")
+        end
     end
     open(f, "w+", lock = false) do fid
-        write_bdf(fid, bdf)
+        write_bdf(fid, bdf; kwargs...)
     end
 end
 
-function write_bdf(fid::IO, bdf::BDF; useOffset=true)
+function write_bdf(fid::IO, bdf::BDF; useOffset=true, method="mmap", chunk=512_000)
     # Write the header
     write_bdf_header(fid, bdf)
 
     # Write the data
-    write_bdf_data(fid, bdf.header, bdf.data, useOffset)
+    write_bdf_data(fid, bdf.header, bdf.data, useOffset, method, chunk)
 end
 
 function write_bdf_header(fid, bdf::BDF)
@@ -84,29 +85,56 @@ function write_channel_records(fid, nChannels, field, fieldLength; default="")
     end
 end
 
-# Have this just in case default write will prove faulty.
-function write_bdf_data_seq(fid, header, data, useOffset)
 
+# Write data into a file.
+function write_bdf_data(fid, header, data, useOffset, method, chunk)
     scaleFactor = Float32.(header.physMax-header.physMin)./(header.digMax-header.digMin)
+
+    # Insert the offset for compatibility with other software
     if useOffset
         offset = Float32.(header.physMin .- (header.digMin .* scaleFactor))
     else
         offset = Int32.(header.physMin .* 0)
     end
+
     records = header.nDataRecords
     channels = header.nChannels
     srate = header.nSampRec[1]
     duration = header.recordDuration
+
+    if method == "mmap"
+        write_mmap(fid, data, records, channels, srate, duration, scaleFactor, offset)
+    else method == "sequential"
+        write_seq(fid, data, records, channels, srate, duration, scaleFactor, offset, chunk)
+    end
+end
+
+function write_mmap(fid, data, records, channels, srate, duration, scaleFactor, offset)
+    samples = srate * duration
+    recordSize = channels*srate*duration*3
     
+    output = Mmap.mmap(fid, Vector{UInt8}, (records*recordSize))
+    Threads.@threads for rec in 1:records
+        for chan in 1:channels
+            for sample in 1:samples
+                @inbounds @fastmath pointer = (sample + samples*(chan-1) + samples*channels*(rec-1))*3-2
+                recode_value(data, output, pointer, rec, srate, sample, chan, scaleFactor, offset)
+            end
+        end
+    end
+    # Necessary to properly close the mmaped file.
+    finalize(output)
+    GC.gc(false)
+end
+
+function write_seq(fid, data, records, channels, srate, duration, scaleFactor, offset, chunk)
+    recordSize = channels*srate*duration*3
+
     # Testing different methods of writing to disk has shown that writing in chunks,
     # is more efficient than writing the whole array at once.
     # Here we determine the size of chunk that is a multiple of record size and closest
     # to 512k which is used as a default.
-    # TODO: Add a parameter to control the chunk size.
-    defChunk = 512_000
-    recordSize = channels*srate*duration*3
-
-    chunk = defChunk + recordSize/2
+    chunk = chunk + recordSize/2
     chunk = Int(chunk - chunk%recordSize)
     if chunk == 0
         chunk = recordSize
@@ -131,39 +159,8 @@ function write_bdf_data_seq(fid, header, data, useOffset)
                 end
             end
         end
-        @inbounds write(fid, @view output[1:(recEnd-recStart+1)*recordSize])
+        @inbounds write(fid, view(output, 1:(recEnd-recStart+1)*recordSize))
     end
-end
-
-# Write data into a file.
-function write_bdf_data(fid, header, data, useOffset)
-    scaleFactor = Float32.(header.physMax-header.physMin)./(header.digMax-header.digMin)
-
-    # Insert the offset for compatibility with other software
-    if useOffset
-        offset = Float32.(header.physMin .- (header.digMin .* scaleFactor))
-    else
-        offset = Int32.(header.physMin .* 0)
-    end
-
-    records = header.nDataRecords
-    channels = header.nChannels
-    srate = header.nSampRec[1]
-    duration = header.recordDuration
-    samples = srate * duration
-    recordSize = channels*srate*duration*3
-    
-    output = Mmap.mmap(fid, Vector{UInt8}, (records*recordSize))
-    Threads.@threads for rec in 1:records
-        for chan in 1:channels
-            for sample in 1:samples
-                @inbounds @fastmath pointer = (sample + samples*(chan-1) + samples*channels*(rec-1))*3-2
-                recode_value(data, output, pointer, rec, srate, sample, chan, scaleFactor, offset)
-            end
-        end
-    end
-    finalize(output)
-    GC.gc(false)
 end
 
 function recode_value(data::Matrix{Int32}, output::Vector{UInt8}, pointer, rec, srate, sample, chan, scaleFactor, offset)
