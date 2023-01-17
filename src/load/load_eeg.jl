@@ -217,14 +217,13 @@ function parse_coordinates(fid)
     return coords, line
 end
 
-# Count how big is the comment section
+# Write all comments to a vector
 function parse_comments(fid)
-    comment_lines = 0
+    comments = String[]
     while !eof(fid)
-        comment_lines += 1
-        line = readline(fid)
+        push!(comments, readline(fid))
     end
-    return comment_lines
+    return comments
 end
 
 # Read markers from vmrk file

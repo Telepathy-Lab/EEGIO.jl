@@ -3,7 +3,7 @@ mutable struct EEGHeader
     binary::Type
     channels::Dict
     coords::Dict
-    comments::Int
+    comments::Vector{String}
 end
 
 mutable struct EEGMarkers
@@ -21,6 +21,10 @@ mutable struct EEG <: EEGData
     data::Matrix
     path::String
     file::String
+end
+
+function EEGHeader()
+    
 end
 
 Base.show(io::IO, eeg::EEGHeader) = print(io, "EEG Header")
