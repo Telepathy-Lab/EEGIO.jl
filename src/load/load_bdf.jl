@@ -192,7 +192,7 @@ end
 function check_status(chans, header)
     ind = findfirst(isequal("Status"), header.chanLabels)
     if isnothing(ind) 
-        error("No Status channel in the file!")
+        error("No Status channel in the file! If you want to ignore it, set readStatus=false.")
     elseif ind ∉ chans
         return [chans..., ind]
     else

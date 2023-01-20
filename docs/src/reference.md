@@ -1,7 +1,7 @@
 ## BioSemi BDF
 ```@autodocs
 Modules = [EEGIO]
-Pages = ["load_bdf.jl"]
+Pages = ["BDF.jl", "load_bdf.jl"]
 ```
 
 ## BrainVision EEG

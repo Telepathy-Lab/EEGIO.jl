@@ -1,4 +1,4 @@
-# TODO: add checks if data fits the physical/digital dimensions to be written into Int24
+# TODO: make data checks in the constructor method
 
 function write_bdf(f::String, bdf::BDF; overwrite=false, kwargs...)
     if isfile(f)
@@ -25,7 +25,7 @@ function write_bdf_header(fid, bdf::BDF)
 
     header = bdf.header
 
-    write(fid, 0xff)
+    write(fid, UInt8(header.idCodeNonASCII))
     write_record(fid, header.idCode, 7, default="BIOSEMI")
     write_record(fid, header.subID, 80)
     write_record(fid, header.recID, 80)
