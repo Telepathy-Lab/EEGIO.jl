@@ -115,7 +115,8 @@ end
 Reader the EEG header based on the name of file. 
 """
 function read_eeg_header(f::String)
-    header = EEGHeader(Dict(), Any, Dict(), Dict(), 0)
+    # Initialize empty header, because not all fields are present in files
+    header = EEGHeader(Dict(), Any, Dict(), Dict(), String[])
     open(f) do fid
         while !eof(fid)
             line = readline(fid)
@@ -210,9 +211,9 @@ function parse_coordinates(fid)
     coordinates = reduce(hcat,coordinates)
     coords = Dict(
         "number" => parse.(Int, replace.(coordinates[1,:],"Ch"=>"")),
-        "radius" => parse.(Float64, replace(coordinates[2,:], "" => "NaN")),
-        "theta" => parse.(Float64, replace(coordinates[3,:], "" => "NaN")),
-        "phi" => parse.(Float64, replace(coordinates[4,:], "" => "NaN"))
+        "radius" => parse.(Int, replace(coordinates[2,:], "" => "NaN")),
+        "theta" => parse.(Int, replace(coordinates[3,:], "" => "NaN")),
+        "phi" => parse.(Int, replace(coordinates[4,:], "" => "NaN"))
     )
     return coords, line
 end
@@ -250,6 +251,8 @@ function parse_markers(fid)
     end
     if length(markers[1]) > 6
         date = pop!(markers[1])
+    else
+        date = ""
     end
 
     markers = reduce(hcat,markers)
@@ -261,7 +264,7 @@ function parse_markers(fid)
     duration = parse.(Int, replace(markers[5,:], "" => "NaN"))
     chanNum = parse.(Int, replace(markers[6,:], "" => "NaN"))
 
-    return EEGMarkers(number, type, description, position, duration, chanNum)
+    return EEGMarkers(number, type, description, position, duration, chanNum, date)
 end
 
 # Read the sensor data from eeg file

@@ -69,6 +69,7 @@ function update_markers!(markers::EEGMarkers, samples)
             markers.position[mask],
             markers.duration[mask],
             markers.chanNum[mask],
+            markers.date,
         )
     end
 end
