@@ -1,4 +1,3 @@
-# TODO: make data checks in the constructor method
 
 function write_bdf(f::String, bdf::BDF; overwrite=false, kwargs...)
     if isfile(f)

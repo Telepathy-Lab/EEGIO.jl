@@ -17,28 +17,28 @@ end
     header = read_bdf(testFile, onlyHeader=true)
     @test typeof(header) == BDFHeader
 
-    @test EEGIO.pick_records(:All, header) == 1:60
-    @test EEGIO.pick_records(30, header) == 30
-    @test EEGIO.pick_records((2.5,15.9), header) == 2:16
-    @test EEGIO.pick_records(4:29, header) == 4:29
-    @test_throws "Selection of time interval \"one\"" EEGIO.pick_records("one", header)
+    @test EEGIO.pick_samples(header, :All) == 1:60
+    @test EEGIO.pick_samples(header, 30) == 30:30
+    @test EEGIO.pick_samples(header, (2.5,15.9)) == 2:16
+    @test EEGIO.pick_samples(header, 4:29) == 4:29
+    @test_throws "Selection of time interval \"one\"" EEGIO.pick_samples(header, "one")
     
-    @test EEGIO.pick_channels(14, header) == 14
-    @test EEGIO.pick_channels(2:10, header) == 2:10
-    @test EEGIO.pick_channels(r"A1.", header) == [10, 11, 12, 13, 14, 15, 16]
-    @test EEGIO.pick_channels(["A1", "A7", "A13"], header) == [1, 7, 13]
-    @test EEGIO.pick_channels(:All, header) == 1:17
-    @test EEGIO.pick_channels(:None, header) == Int64[]
-    @test_throws "Selection of channels \"Any[]\"" EEGIO.pick_channels([], header)
+    @test EEGIO.pick_channels(header, 14) == 14
+    @test EEGIO.pick_channels(header, 2:10) == 2:10
+    @test EEGIO.pick_channels(header, r"A1.") == [10, 11, 12, 13, 14, 15, 16]
+    @test EEGIO.pick_channels(header, ["A1", "A7", "A13"]) == [1, 7, 13]
+    @test EEGIO.pick_channels(header, :All) == 1:17
+    @test EEGIO.pick_channels(header, :None) == Int64[]
+    @test_throws "Selection of channels \"Any[]\"" EEGIO.pick_channels(header, [])
 
-    @test EEGIO.check_status(1:4, header) == [1, 2, 3, 4, 17]
+    @test EEGIO.check_status(header, 1:4) == [1, 2, 3, 4, 17]
     
     EEGIO.update_header!(header, 1:10)
+    @test header.nDataRecords == 10
+
+    EEGIO.update_header!(header, collect(1:10))
     @test header.nBytes == 256*11
     @test header.nChannels == 10
-
-    @test EEGIO.changeToInt(Float64) == Int64
-    @test EEGIO.changeToInt(Float32) == Int32
 end
 
 @testitem "Load BDF: Data exctraction" begin
@@ -70,7 +70,7 @@ end
     testFile = joinpath(@__DIR__, "files", "Newtest17-256.bdf")
     open(testFile) do fid
         header = EEGIO.read_bdf_header(fid)
-        data = EEGIO.read_bdf_data(fid, header, true, Float64, :All, :None, :All, true, false)
+        data = EEGIO.read_bdf_data(fid, header, true, Float64, :All, :None, :All, true)
 
         @test header.idCode == "BIOSEMI"
         @test header.nBytes == 4608

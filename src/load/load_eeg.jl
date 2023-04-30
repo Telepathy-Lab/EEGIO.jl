@@ -285,11 +285,11 @@ function read_eeg_data(fid::IO, header::EEGHeader, markers::EEGMarkers, numPreci
     resolution = header.channels["resolution"]
 
     # Select a subset of channels/samples if user specified a narrower scope.
-    chans = pick_channels(chanSelect, nDataChannels, header.channels["name"])
-    chans = setdiff(chans, pick_channels(chanIgnore, nDataChannels, header.channels["name"]))
+    chans = pick_channels(header, chanSelect)
+    chans = setdiff(chans, pick_channels(header, chanIgnore))
     nChannels = length(chans)
 
-    samples = pick_samples(timeSelect, nDataSamples, header)
+    samples = pick_samples(header, timeSelect, nDataSamples)
     nSamples = length(samples)
 
     # Update header and markers to match the subsets

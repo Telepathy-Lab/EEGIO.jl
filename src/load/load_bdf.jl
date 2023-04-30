@@ -1,4 +1,3 @@
-# TODO: Make sure channel/range selection also corrects the appropriate header fields
 
 """
     read_bdf(f::String; kwargs...)
@@ -170,10 +169,10 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
     end
     
     # Limiting the number of channels and records to a requested subset.
-    records = pick_samples(timeSelect, header)
-    chans = pick_channels(chanSelect, header.nChannels, header.chanLabels)
-    chans = setdiff(chans, pick_channels(chanIgnore, header.nChannels, header.chanLabels))
-    if readStatus chans = check_status(chans, header) end
+    records = pick_samples(header, timeSelect)
+    chans = pick_channels(header, chanSelect)
+    chans = setdiff(chans, pick_channels(header, chanIgnore))
+    if readStatus chans = check_status(header, chans) end
 
     # Update the header to reflect the subset of data actually read.
     update_header!(header, records)
@@ -189,7 +188,7 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
 end
 
 # Always include status channel unless explicitly stated otherwise
-function check_status(chans, header)
+function check_status(header, chans)
     ind = findfirst(isequal("Status"), header.chanLabels)
     if isnothing(ind) 
         error("No Status channel in the file! If you want to ignore it, set readStatus=false.")

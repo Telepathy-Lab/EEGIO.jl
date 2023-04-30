@@ -7,6 +7,7 @@ using Mmap
 version = "0.1.0"
 
 abstract type EEGData end
+abstract type Header end
 export EEGData
 
 # BDF files

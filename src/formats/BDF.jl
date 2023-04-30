@@ -1,4 +1,4 @@
-mutable struct BDFHeader
+mutable struct BDFHeader <: Header
     idCodeNonASCII::Int
     idCode::String
     subID::String
@@ -75,7 +75,8 @@ to disk.
 header = BDFHeader(1024, 17, 256)
 ```
 ```julia
-header = BDFHeader(1024, 17, 256, subID="Subject 1", recID="Recording 1", startDate="01.01.2019", startTime="00:00:00")
+header = BDFHeader(1024, 17, 256, subID="Subject 1", recID="Recording 1", 
+                    startDate="01.01.2019", startTime="00:00:00")
 ```
 """
 function BDFHeader(samples::Integer, channels::Integer, sRate::Integer; 
@@ -261,4 +262,4 @@ Base.show(io::IO, bdf::BDFHeader) = print(io, "BDF Header")
 Base.show(io::IO, bdf::BDF) = print(io, "BDF file")
 #Base.show(io::IO, m::MIME"text/plain", bdf::BDF) = print(io, "BDF file, length $(round(bdf.header.nDataRecords/60,digits=2)) min., $(bdf.header.nChannels) channels")
 
-Base.show(io::IO, ::Type{BDF}) = print(io, "BDF")
+Base.show(io::IO, ::MIME"text/plain", ::Type{BDF}) = print(io, "BDF")

@@ -99,7 +99,7 @@ end
 
 # Cropping based on time of the recording in seconds.
 function crop(bdf::BDF, timeSelect)
-    range = pick_samples(timeSelect, bdf.header)
+    range = pick_samples(bdf.header, timeSelect)
     header = update_header(bdf.header, range)
 
     sRate = bdf.header.nSampRec[1]
@@ -110,7 +110,7 @@ function crop(bdf::BDF, timeSelect)
 end
 
 function crop(eeg::EEG, timeSelect)
-    range = pick_samples(timeSelect, size(eeg.data,1), eeg.header)
+    range = pick_samples(eeg.header, timeSelect, size(eeg.data,1))
     markers = update_markers(eeg.markers, range)
 
     return EEG(eeg.header, markers, eeg.data[range, :], eeg.file, eeg.path)
@@ -122,7 +122,7 @@ end
 Performs cropping in place. See [`crop`](@ref) for more details. 
 """
 function crop!(bdf::BDF, timeSelect)
-    range = pick_samples(timeSelect, bdf.header)
+    range = pick_samples(bdf.header, timeSelect)
     update_header!(bdf.header, range)
 
     sRate = bdf.header.nSampRec[1]
@@ -133,7 +133,7 @@ function crop!(bdf::BDF, timeSelect)
 end
 
 function crop!(eeg::EEG, timeSelect)
-    range = pick_samples(timeSelect, size(eeg.data,1), eeg.header)
+    range = pick_samples(eeg.header, timeSelect, size(eeg.data,1))
     update_markers!(eeg.markers, range)
 
     eeg.data = eeg.data[range, :]
@@ -168,14 +168,14 @@ end
 
 # Selecting a subset of channels from the original data.
 function select(bdf::BDF, channels)
-    newChannels = pick_channels(channels, bdf.header.nChannels, bdf.header.chanLabels)
+    newChannels = pick_channels(bdf.header, channels)
     newHeader = update_header(bdf.header, newChannels)
     newData = bdf.data[:, newChannels]
     return BDF(newHeader, newData, bdf.path, bdf.file)
 end
 
 function select(eeg::EEG, channels)
-    newChannels = pick_channels(channels, eeg.header.common["NumberOfChannels"], eeg.header.channels["name"])
+    newChannels = pick_channels(eeg.header, channels)
     newHeader = update_header(eeg.header, newChannels)
     newData = eeg.data[:, newChannels]
     return EEG(newHeader, eeg.markers, newData, eeg.path, eeg.file)
@@ -187,13 +187,13 @@ end
 Performs channel selection in place. See [`select`](@ref) for more details.
 """
 function select!(bdf::BDF, channels)
-    newChannels = pick_channels(channels, bdf.header.nChannels, bdf.header.chanLabels)
+    newChannels = pick_channels(bdf.header, channels)
     update_header!(bdf.header, newChannels)
     bdf.data = bdf.data[:, newChannels]
 end
 
 function select!(eeg::EEG, channels)
-    newChannels = pick_channels(channels, eeg.header.common["NumberOfChannels"], eeg.header.channels["name"])
+    newChannels = pick_channels(bdf.header, channels)
     update_header!(eeg.header, newChannels)
     eeg.data = eeg.data[:, newChannels]
 end
