@@ -1,6 +1,6 @@
 """
-    EEGIO.pick_samples(records, header::BDFHeader)
-    EEGIO.pick_samples(samples, nDataSamples::Ineger, header::EEGHeader)
+    EEGIO.pick_samples(header::BDFHeader, records)
+    EEGIO.pick_samples(header::BDFHeader, samples, nDataSamples::Ineger)
 
 Internal function used to properly pick the range of samples that should be read from every
 channel. Since data is stored differently in each format, specialized variants were written
@@ -14,11 +14,11 @@ Always returns a UnitRange.
 
 ```julia
 # Picking the first 10 records of the data (assuming `file` is an object of type BDF).
-pick_samples(1:10, file.header)
+pick_samples(file.header, 1:10)
 ```
 ```julia
 # Picking the first 10 seconds of the data (assuming `file` is an object of type EEG).
-pick_samples((1.,10.), size(file.data,1), file.header)
+pick_samples(file.header, (1.,10.), size(file.data,1))
 ```
 """
 function pick_samples(header, samples::Any)
