@@ -55,7 +55,7 @@ end
         "unit" => ["µV", "µV", "µV", "µV", "µV"]
         )
     coords = Dict{Any, Any}()
-    comments = 420
+    comments = ["420"]
         
     number = Int32[1, 2, 3, 4, 5]
     type = ["New Segment", "Stimulus", "Stimulus", "Stimulus", "Stimulus"]
@@ -67,9 +67,10 @@ end
     data = rand(Float32, (2000, 5))
     path = "C:/Path/To/File"
     file = "Filename.ext"
+    date = "01.01.2000"
 
     header = EEGHeader(common, binary, channels, coords, comments)
-    markers = EEGMarkers(number, type, description, position, duration, chanNum)
+    markers = EEGMarkers(number, type, description, position, duration, chanNum, date)
     eegData = EEG(header, markers, data, path, file)
 
     @test typeof(header) == EEGHeader
