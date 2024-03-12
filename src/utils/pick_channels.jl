@@ -38,7 +38,7 @@ end
 function pick_channels(header::Header, channel::Integer)
     nChannels, chanLabels = channel_info(header)
     if channel in 1:nChannels
-        return channel
+        return [channel]
     else
         error("No channel number $channel available. File contains only $nChannels channels.")
     end
@@ -48,7 +48,7 @@ end
 function pick_channels(header::Header, channels::UnitRange)
     nChannels, chanLabels = channel_info(header)
     if channels[1] >= 1 && channels[end] <= nChannels
-        return channels
+        return collect(channels)
     else
         error("Range $channels does not fit in the available $nChannels channels.")
     end
@@ -93,4 +93,5 @@ function pick_channels(header::Header, channels::Symbol)
 end
 
 channel_info(header::BDFHeader) = header.nChannels, header.chanLabels
+channel_info(header::EDFHeader) = header.nChannels, header.chanLabels
 channel_info(header::EEGHeader) = header.common["NumberOfChannels"], header.channels["name"]
