@@ -6,7 +6,6 @@ version = "0.1.0"
 [deps]
 Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
 OhMyThreads = "67456a42-1dca-4109-a031-0a68de7e3ad5"
-TaskLocalValues = "ed4db957-447d-4319-bfb6-7fa9ae7ecf34"
 
 [compat]
 julia = "^1.6.7"

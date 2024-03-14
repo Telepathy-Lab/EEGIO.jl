@@ -1,8 +1,8 @@
 module EEGIO
 
 using Mmap
-using OhMyThreads: tforeach
-using TaskLocalValues: TaskLocalValue
+using Base.Iterators: partition
+using OhMyThreads: @tasks, TaskLocalValue, DynamicScheduler
 
 # TODO make a test to check if this value is updated
 # with Pkg.TOML.parsefile(joinpath(pkgdir(EEGIO), "Project.toml"))["version"]

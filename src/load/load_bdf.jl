@@ -52,6 +52,13 @@ a more thorough explanation of different options.
       technical data about the hardware setup, this setting provides an option to ignore it.
       Please be aware, that its absence might generate errors in code that expects it (even
       if it is empty). Default is set to true. 
+- `method::Symbol=:Direct`
+    - Choose the IO method of reading data. Can be either :Direct (set as the default) for 
+      reading the file in chunks or :Mmap for using memory mapping.
+- `tasks::Int=1`
+    - Specifies how many concurent tasks will be spawn to read chunks of data. Tasks will use
+      as many threads as there are available to Julia, but users can specify a higher number.
+      Default is set to 1 (equal to single threaded run).
 
 Current implementation follows closely the specification formulated by [BioSemi]
 (https://www.biosemi.com/faq/file_format.htm) that extends EDF format from 16 to 24-bit.
@@ -60,31 +67,31 @@ the specification.
 BDF+ extension is not yet implemented.
 """
 function read_bdf(f::String; kwargs...)
-    # Open file
-    open(f) do fid
-        read_bdf(fid; kwargs...)
+    # Check if an existing path is given, then open the file
+    if ispath(f)
+        path, file = splitdir(f)
+        open(f) do fid
+            read_bdf(fid; path=path, file=file, kwargs...)
+        end
+    else
+        error("$f is not a valid file path.")
     end
 end
 
-# Internal function called by public API and FileIO
-function read_bdf(fid::IO; onlyHeader=false, addOffset=true, numPrecision=Float64,
-    chanSelect=:All, chanIgnore=:None, timeSelect=:All, readStatus=true)
-    
-    # Preserve the path and the name of file
-    filepath = splitdir(split(strip(fid.name, ['<','>']), ' ', limit=2)[2])
-    path = abspath(filepath[1])
-    file = filepath[2]
+# Internal function called by public API
+function read_bdf(fid::IO; path="", file="", onlyHeader=false, addOffset=true, numPrecision=Float64,
+    chanSelect=:All, chanIgnore=:None, timeSelect=:All, readStatus=true, method=:Direct, tasks=1)
     
     # Read the header
     header = read_bdf_header(fid)
 
     if onlyHeader
-        return header
+        data = Vector{numPrecision}(undef, 0)
     else
         # Read the data
-        data = read_bdf_data(fid, header, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus)
-        return BDF(header, data, path, file)
+        data = read_bdf_data(fid, header, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, method, tasks)
     end
+    return BDF(header, data, path, file)
 end
 
 """
@@ -100,22 +107,22 @@ function read_bdf_header(fid::IO)
     recID =             decodeString(fid, 80)
     startDate =         decodeString(fid, 8)
     startTime =         decodeString(fid, 8)
-    nBytes =            decodeNumber(fid, 8)
+    nBytes =            decodeNumber(fid, Int64, 8)
     versionDataFormat = decodeString(fid, 44)
-    nDataRecords =      decodeNumber(fid, 8)
-    recordDuration =    decodeNumber(fid, 8)
-    nChannels =         decodeNumber(fid, 4)
+    nDataRecords =      decodeNumber(fid, Int64, 8)
+    recordDuration =    decodeNumber(fid, Int64, 8)
+    nChannels =         decodeNumber(fid, Int64, 4)
 
     # Read the data channel specific information
     chanLabels =    decodeChanStrings(fid, nChannels, 16)
     transducer =    decodeChanStrings(fid, nChannels, 80)
     physDim =       decodeChanStrings(fid, nChannels, 8)
-    physMin =       decodeChanNumbers(fid, nChannels, 8)
-    physMax =       decodeChanNumbers(fid, nChannels, 8)
-    digMin =        decodeChanNumbers(fid, nChannels, 8)
-    digMax =        decodeChanNumbers(fid, nChannels, 8)
+    physMin =       decodeChanNumbers(fid, Int64, nChannels, 8)
+    physMax =       decodeChanNumbers(fid, Int64, nChannels, 8)
+    digMin =        decodeChanNumbers(fid, Int64, nChannels, 8)
+    digMax =        decodeChanNumbers(fid, Int64, nChannels, 8)
     prefilt =       decodeChanStrings(fid, nChannels, 80)
-    nSampRec =      decodeChanNumbers(fid, nChannels, 8)
+    nSampRec =      decodeChanNumbers(fid, Int64, nChannels, 8)
     reserved =      decodeChanStrings(fid, nChannels, 32)
 
     return BDFHeader(idCodeNonASCII, idCode, subID, recID, startDate, startTime, nBytes, 
@@ -123,35 +130,11 @@ function read_bdf_header(fid::IO)
     physDim, physMin, physMax, digMin, digMax, prefilt, nSampRec, reserved)
 end
 
-# Helper functions for decoding string and numerical header entries
-decodeString(fid, size) = strip(ascii(String(read!(fid, Array{UInt8}(undef, size)))))
-decodeNumber(fid, size) = parse(Int, ascii(String(read!(fid, Array{UInt8}(undef, size)))))
-
-# Helper function to decode channel specific string entries
-function decodeChanStrings(fid, nChannels, size)
-    arr = Array{String}(undef, nChannels)
-    buf = read(fid, nChannels*size)
-    for i=1:nChannels
-        @inbounds arr[i] = strip(ascii(String(buf[(size*(i-1)+1):(size*i)])))
-    end
-    return arr
-end
-
-# Helper function to decode channel specific numerical entries
-function decodeChanNumbers(fid, nChannels, size)
-    arr = Array{Int}(undef, nChannels)
-    buf = read(fid, nChannels*size)
-    for i=1:nChannels
-        @inbounds arr[i] = parse(Int, ascii(String(buf[(size*(i-1)+1):(size*i)])))
-    end
-    return arr
-end
-
 # Read the EEG data points to a preallocated array.
-function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus)
+function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, method, tasks)
     nChannels = header.nChannels
     srate = Int(header.nSampRec[1] / header.recordDuration)
-    scaleFactor = numPrecision.(header.physMax-header.physMin)./(header.digMax-header.digMin)
+    scaleFactors = numPrecision.(header.physMax-header.physMin)./(header.digMax-header.digMin)
 
     #=
     Addition of offset value to data points seems to be a legacy from reading EDF files that
@@ -162,11 +145,7 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
     However, for compatibility with other EEG software, adding offset is the default.
     It can be switched off through setting the parameter offset=false.
     =#
-    if addOffset
-        offset = Float64.(header.physMin .- (header.digMin .* scaleFactor))
-    else
-        offset = Int.(header.physMin .* 0)
-    end
+    scaleFactors, offsets = resolve_offsets(header, addOffset, numPrecision)
     
     # Limiting the number of channels and records to a requested subset.
     records = pick_samples(header, timeSelect)
@@ -174,16 +153,15 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
     chans = setdiff(chans, pick_channels(header, chanIgnore))
     if readStatus chans = check_status(header, chans) end
 
+    raw = read_method(fid, method, Vector{UInt8}, 3*header.nDataRecords*nChannels*srate)
+
+    data = Array{numPrecision}(undef, (srate*length(records),length(chans)));
+    convert_data!(raw, data, srate, records, chans, nChannels, scaleFactors, offsets, tasks)
+    
     # Update the header to reflect the subset of data actually read.
     update_header!(header, records)
     update_header!(header, chans)
 
-    raw = Mmap.mmap(fid);
-
-    data = Array{numPrecision}(undef, (srate*length(records),length(chans)));
-    convert_data!(raw, data, srate, records, chans, nChannels, scaleFactor, offset)
-    finalize(raw)
-    GC.gc(false)
     return data
 end
 
@@ -199,32 +177,93 @@ function check_status(header, chans)
     end
 end
 
+# Read data from one record into a buffer and copy it to the output matrix
+function convert_data!(raw::IO, data, srate, records, chans, nChannels, scaleFactors, offsets, tasks)
 
-# Loop through all segments for each channel
-function convert_data!(raw::Array{UInt8}, data, srate, records, chans, nChannels, scaleFactor, offset)
-    Threads.@threads for recIdx in eachindex(records)
-        for chanIdx in eachindex(chans)
-            for dataPoint=1:srate
-                @fastmath sample = (records[recIdx]-1)*nChannels*srate + (chans[chanIdx]-1)*srate + dataPoint-1
-                @fastmath dp = dataPoint+(recIdx-1)*srate
-                convert!(raw, data, dp, sample, chans[chanIdx], chanIdx, scaleFactor, offset)
-            end
+    posi = position(raw)
+    readLock = ReentrantLock()
+
+    scratch = TaskLocalValue{Array{UInt8}}(() -> Array{UInt8}(undef, (3, srate, maximum(chans))))
+
+    @tasks for recIdx in 1:length(records)
+        @set scheduler = DynamicScheduler(; nchunks=tasks)
+        convert_data!(raw, data, scratch, readLock, posi, srate, recIdx, records, chans, nChannels, scaleFactors, offsets)
+    end
+
+    return data
+end
+
+function convert_data!(raw::IO, data, scratch, readLock, posi, srate, recIdx, records, chans, nChannels, scaleFactors, offsets)
+    
+    rawOffset = 3 * (records[recIdx] - 1) * nChannels * srate + posi
+
+    lock(readLock) do 
+        seek(raw, rawOffset)
+        read!(raw, scratch[])
+    end
+    
+    recordOffset = (recIdx-1) * srate
+
+    parse_record!(scratch[], data, recordOffset, chans, scaleFactors, offsets)
+
+    return nothing
+end
+
+function parse_record!(raw::Array{UInt8}, data, recordOffset, chans, scaleFactors, offsets)
+    for (chanIdx, chan) in enumerate(chans)
+        scaleFactor = scaleFactors[chan]
+        offset = offsets[chan]
+        idx = 0
+        for triplet in eachcol(view(raw, :, :, chan))
+            idx += 1
+            parse_value!(triplet, data, recordOffset+idx, 0, chanIdx, scaleFactor, offset)
         end
     end
+
+    return nothing
 end
 
-# Convert 24-bit integer numbers into floats.
-# Default conversion from digital to analog output.
-function convert!(raw::Array{UInt8}, data::Array{<:AbstractFloat}, dp, sample, chan, chanIdx, scaleFactor, offset)
-    @inbounds @fastmath data[dp,chanIdx] = ((((Int32(raw[3*sample+1]) << 8) | 
-                                            (Int32(raw[3*sample+2]) << 16) | 
-                                            (Int32(raw[3*sample+3]) << 24)) >> 8) * scaleFactor[chan]) + offset[chan]
+# Read data through mmap
+function convert_data!(raw::Vector, data, srate, records, chans, nChannels, scaleFactors, offsets, tasks)
+    @tasks for recIdx in 1:length(records)
+        @set scheduler = DynamicScheduler(; nchunks=tasks)
+        parse_record!(raw, data, srate, recIdx, records, chans, nChannels, scaleFactors, offsets)
+    end
+    finalize(raw)
+
+    return nothing
 end
 
-# Convert 24-bit integer numbers into 32/64 bit integers.
-# Used when 'digital' option was chosen.
-function convert!(raw::Array{UInt8}, data::Array{<:Integer}, dp, sample, chan, chanIdx, scaleFactor, offset)
-    @inbounds @fastmath data[dp,chanIdx] = (((Int32(raw[3*sample+1]) << 8) | 
-                                            (Int32(raw[3*sample+2]) << 16) | 
-                                            (Int32(raw[3*sample+3]) << 24)) >> 8)
+function parse_record!(raw::Vector{UInt8}, data, srate, recIdx, records, chans, nChannels, scaleFactors, offsets)
+    recordOffset = (records[recIdx] - 1) * nChannels * srate
+    outputRecOffset = (recIdx - 1) * srate
+    for chanIdx in eachindex(chans)
+        scaleFactor = scaleFactors[chans[chanIdx]]
+        offset = offsets[chans[chanIdx]]
+        chanOffset = (chans[chanIdx] - 1) * srate
+        for dataPoint in 1:srate
+            sample = recordOffset + chanOffset + dataPoint - 1
+            dp = dataPoint + outputRecOffset
+            parse_value!(raw, data, dp, sample, chanIdx, scaleFactor, offset)
+        end
+    end
+
+    return nothing
+end
+
+# Parsing the raw values into floats trough applying a scale factor and offest from the header
+function parse_value!(raw, data::Array{<:AbstractFloat}, idx, sample, chanIdx, scaleFactor, offset)
+    @inbounds data[idx, chanIdx] = (convert24to32(raw, sample) * scaleFactor) + offset
+end
+
+# Parsing the raw values into integers of chosen precision
+function parse_value!(raw, data::Array{<:Integer}, idx, sample, chanIdx, scaleFactor, offset)
+    @inbounds data[idx, chanIdx] = convert24to32(raw, sample)
+end
+
+# Converting the 24-bit (3-byte triplet) into 32-bit integer
+function convert24to32(bytes, sample)
+    return ((Int32(bytes[3*sample+1]) << 8) | 
+            (Int32(bytes[3*sample+2]) << 16) | 
+            (Int32(bytes[3*sample+3]) << 24)) >> 8
 end

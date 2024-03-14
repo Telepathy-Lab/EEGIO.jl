@@ -259,7 +259,10 @@ function check_bounds(header::BDFHeader, data)
 end
 
 Base.show(io::IO, bdf::BDFHeader) = print(io, "BDF Header")
-Base.show(io::IO, bdf::BDF) = print(io, "BDF file")
-#Base.show(io::IO, m::MIME"text/plain", bdf::BDF) = print(io, "BDF file, length $(round(bdf.header.nDataRecords/60,digits=2)) min., $(bdf.header.nChannels) channels")
-
 Base.show(io::IO, ::MIME"text/plain", ::Type{BDF}) = print(io, "BDF")
+
+function Base.show(io::IO, m::MIME"text/plain", bdf::BDF) 
+    print(io, 
+    "BDF file ($(bdf.header.nChannels) channels, \
+    duration: $(round(bdf.header.nDataRecords/60,digits=2)) min.)")
+end
