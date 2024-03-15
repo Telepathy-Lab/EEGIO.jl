@@ -94,8 +94,8 @@ function EEGHeader(sInterval::Integer, nChannels::Integer, binaryFormat::Type;
     
     common = Dict(
         "Codepage" => "UTF-8",
-        "DataFile" => "$filename.eeg",
-        "MarkerFile" => "$filename.vmrk",
+        "DataFile" => "",
+        "MarkerFile" => "",
         "DataFormat" => "BINARY",
         "DataOrientation" => "MULTIPLEXED",
         "DataType" => "TIMEDOMAIN",
@@ -164,6 +164,7 @@ to be provided (and `type` if you want to record more than one type of event).
 * `duration::Vector{String}`: Duration of each marker in samples, defaults to 0.
 * `chanNum::Vector{String}`: Channel number to which marker is applicable, defaults to 0 (all).
 * `date::String`: Date of the recording (placed only at the first marker).
+* `empty::Bool`: Return a completely empty EEGMarkers struct, default is set to false.
 
 ##### Returns
 * `EEGMarkers`: EEGMarkers struct with all the provided information.
@@ -174,7 +175,10 @@ markers = EEGMarkers(type=["New Segment", "Stimulus"], description=["", "S  1"],
     position=[1, 1000], duration=[1, 0], chanNum=[1, 1])
 ```
 """
-function EEGMarkers(; type="", description="", position="", duration="", chanNum="", date="")
+function EEGMarkers(; type="", description="", position="", duration="", chanNum="", date="", empty=false)
+    # Return a fully empty marker struct.
+    empty && return EEGMarkers([],[],[],[],[],[],"")
+
     # Create a default EEGMarkers struct with obligatory `New Segment` marker.
     markers = EEGMarkers([1], ["New Segment"], [""], [1], [1], [0], date)
 
@@ -273,16 +277,24 @@ end
 Base.show(io::IO, eeg::EEGHeader) = print(io, "EEG Header")
 Base.show(io::IO, eeg::EEGMarkers) = print(io, "EEG Markers")
 
-Base.show(io::IO, eeg::EEG) = print(io,
-    """
-    EEG File ($(eeg.file))
-        Channels:       $(eeg.header.common["NumberOfChannels"]) $(eeg.header.channels["name"][1:5])...
-        Sampling rate:  $(1_000_000/eeg.header.common["SamplingInterval"]) Hz
-        Length:         $(size(eeg.data, 1)/(1_000_000/eeg.header.common["SamplingInterval"])) seconds
-        Markers:        $(length(eeg.markers.description)) \
-        $(length(eeg.markers.description)>5 ? eeg.markers.description[1:5] : eeg.markers.description[:])...
-        Size in MB:     $(round(sizeof(eeg.data)/1_000_000, digits=2))
-    """
-)
+function Base.show(io::IO, eeg::EEGData)
+    print(io,
+    "EEG file ($(eeg.header.common["NumberOfChannels"]) channels, \
+    duration: $(round(size(eeg.data, 1)/(1_000_000/eeg.header.common["SamplingInterval"]*60),digits=2)) min.)"
+    )
+end
+
+# TODO: Make a dedicated function for such a detailed description of data.
+# Base.show(io::IO, eeg::EEG) = print(io,
+#     """
+#     EEG File ($(eeg.file))
+#         Channels:       $(eeg.header.common["NumberOfChannels"]) $(eeg.header.channels["name"][1:5])...
+#         Sampling rate:  $(1_000_000/eeg.header.common["SamplingInterval"]) Hz
+#         Length:         $(size(eeg.data, 1)/(1_000_000/eeg.header.common["SamplingInterval"])) seconds
+#         Markers:        $(length(eeg.markers.description)) \
+#         $(length(eeg.markers.description)>5 ? eeg.markers.description[1:5] : eeg.markers.description[:])...
+#         Size in MB:     $(round(sizeof(eeg.data)/1_048_576, digits=2))
+#     """
+# )
 
 Base.show(io::IO, ::Type{EEG}) = print(io, "EEG")

@@ -1,6 +1,8 @@
 module EEGIO
 
 using Mmap
+using Base.Iterators: partition
+using OhMyThreads: @tasks, TaskLocalValue, DynamicScheduler
 
 # TODO make a test to check if this value is updated
 # with Pkg.TOML.parsefile(joinpath(pkgdir(EEGIO), "Project.toml"))["version"]
@@ -8,7 +10,9 @@ version = "0.1.0"
 
 abstract type EEGData end
 abstract type Header end
-export EEGData
+
+# Misc functions
+include("utils/misc.jl")
 
 # BDF files
 include("formats/BDF.jl")

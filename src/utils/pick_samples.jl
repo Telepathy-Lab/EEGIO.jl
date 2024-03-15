@@ -25,9 +25,10 @@ function pick_samples(header, samples::Any)
     error("Selection of time interval \"$samples\" should be a number, a range, or a list of indices.")
 end
  
-# BDF selection
+# BDF and EDF selection
 # Picking the time interval to load, measured as number of records or seconds.
-function pick_samples(header::BDFHeader, records::Symbol)
+
+function pick_samples(header::BEDFHeader, records::Symbol)
     if records == :All
         return 1:header.nDataRecords
     else
@@ -36,7 +37,7 @@ function pick_samples(header::BDFHeader, records::Symbol)
 end
 
 # Integer interpreted as an index of a data record to be read.
-function pick_samples(header::BDFHeader, record::Integer)
+function pick_samples(header::BEDFHeader, record::Integer)
     if 0 < record < header.nDataRecords
         return record:record
     else
@@ -45,7 +46,7 @@ function pick_samples(header::BDFHeader, record::Integer)
 end
 
 # Unitrange interpreted as an interval including records with such indexes.
-function pick_samples(header::BDFHeader, records::UnitRange)
+function pick_samples(header::BEDFHeader, records::UnitRange)
     if records[1] >= 1 && records[end] <= header.nDataRecords
         return records
     else
@@ -55,11 +56,11 @@ end
 
 # Tuple of floats interpreted as seconds. Picking all records which parts are included
 # in the given time interval. Therefore actual data might be slightly larger then the interval.
-function pick_samples(header::BDFHeader, records::Tuple{AbstractFloat, AbstractFloat})
+function pick_samples(header::BEDFHeader, records::Tuple{AbstractFloat, AbstractFloat})
     dur =  header.recordDuration
     signalTime = header.nDataRecords * dur
     if 0 <= records[1] && records[2] <= signalTime
-        return Int64(floor(records[1]/dur)):Int64(ceil(records[2]/dur))
+        return Int64(floor(records[1]/dur))+1:Int64(ceil(records[2]/dur))
     else
         error("Time range $records does not fit the available length of the data: $signalTime")
     end

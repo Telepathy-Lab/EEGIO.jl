@@ -47,7 +47,13 @@ consult the online documentation for a more thorough explanation of different op
       Using a tuple of floats will be interpreted as start and stop values in seconds
       and all samples that fit this time span will be read.
       Using Symbol :All will read every sample in the file. This is also the default.
-
+- `method::Symbol=:Direct`
+    - Choose the IO method of reading data. Can be either :Direct (set as the default) for 
+      reading the file in chunks or :Mmap for using memory mapping.
+- `tasks::Int=1`
+    - Specifies how many concurent tasks will be spawn to read chunks of data. Tasks will use
+      as many threads as there are available to Julia, but users can specify a higher number.
+      Default is set to 1 (equal to single threaded run).
 
 Current implementation follows closely the specification formulated by [BrainVision]
 (https://www.brainproducts.com/download/specification-of-brainvision-core-data-format-1-0/).
@@ -55,55 +61,121 @@ However the contents of the header and marker files can differ substantially,
 even if recorded with BrainVision hardware. If your files are not read properly, open an
 issue on github and try to provide a sample dataset to reproduce the problem.
 """
-function read_eeg(f::String; kwargs...)
-    # Open file
-    open(f) do fid
-        read_eeg(fid; kwargs...)
-    end
-end
+function read_eeg(f::String; onlyHeader=false, onlyMarkers=false, numPrecision=Float64, 
+    chanSelect=:All, chanIgnore=:None, timeSelect=:All, method=:Direct, tasks=1)
 
-# Internal function called by public API and FileIO
-function read_eeg(fid::IO; onlyHeader=false, onlyMarkers=false, numPrecision=Float64, 
-    chanSelect=:All, chanIgnore=:None, timeSelect=:All)
-
-    # Preserve the path and the name of file
-    filepath = splitdir(split(strip(fid.name, ['<','>']), ' ', limit=2)[2])
-    path = abspath(filepath[1])
-    file = filepath[2]
-
-    # Assume header file shares the same name and check it for proper extension
-    fName = rsplit(file,'.', limit=2)[1]
-    
-    if isfile(joinpath(path, fName * ".vhdr"))
-        header_file = fName * ".vhdr"
-    elseif isfile(joinpath(path, fName * ".ahdr"))
-        header_file = fName * ".ahdr"
+    path, file = splitdir(f)
+    # Check if an existing path is given and find relevant files
+    if !ispath(path)
+        error("$path is not a valid path.")
+    elseif !isfile(f)
+        error("Could not find requested file at $f.")
     else
-        error("Cannot find header file for $fName")
+        headerFile, dataFile, markerFile = find_eeg_files(f, onlyHeader, onlyMarkers)
     end
 
     # Read the header
-    header = read_eeg_header(joinpath(path, header_file))
-    
+    header = read_eeg_header(headerFile)
+
+    # Read the markers
     if onlyHeader
-        markers = EEGMarkers([],[],[],[],[],[])
+        # Create an empty EEGMarkers object
+        markers = EEGMarkers(empty=true)
     else
-        if isfile(joinpath(path, header.common["MarkerFile"]))
-            markers = read_eeg_markers(joinpath(path, header.common["MarkerFile"]))
+        hvmrk = joinpath(splitdir(f)[1], header.common["MarkerFile"])
+        if splitdir(markerFile)[2] == header.common["MarkerFile"]
+            if isempty(header.common["MarkerFile"])
+                markers = EEGMarkers()
+            else
+                markers = read_eeg_markers(markerFile)
+            end
+        elseif isempty(markerFile)
+            if isfile(hvmrk)
+                markers = read_eeg_markers(hvmrk)
+            else
+                error("Could not find the marker file from the header in the folder.")
+            end
+        elseif isempty(header.common["MarkerFile"])
+            markers = EEGMarkers()
         else
-            @warn "No marker file found under name $(header.common["MarkerFile"])"
-            markers = EEGMarkers([],[],[],[],[],[])
+            if isfile(hvmrk)
+                error("Marker file with the same name exists in the folder, but the header points to another file.")
+            else
+                @warn "Marker file from the header does not exist, reading a marker file with the same name instead."
+                markers = read_eeg_markers(markerFile)
+            end
         end
     end
 
     # Read only header or header and markers if user asked for it.
-    if !(onlyHeader | onlyMarkers)
-        data = read_eeg_data(fid, header, markers, numPrecision, chanSelect, chanIgnore, timeSelect)
-    else
+    if onlyHeader | onlyMarkers
         data = Array{numPrecision}(undef, (0,0))
+    else
+        data = open(dataFile) do fid
+            read_eeg_data(fid, header, markers, numPrecision, chanSelect, chanIgnore, timeSelect, method, tasks)
+        end
     end
 
-    return EEG(header, markers, data, path, file)
+    return EEG(header, markers, data, path, splitext(file)[1])
+end
+
+# Try to locate all files from the triplet
+function find_eeg_files(f::String, onlyHeader, onlyMarkers)
+    path, file = splitdir(f)
+    root, ext = splitext(file)
+
+    if ext == ".eeg"
+        headerFile = find_eeg_header(path, root)
+        dataFile = f
+        markerFile = onlyHeader ? "" : find_eeg_markers(path, root)
+    elseif ext in [".vhdr", ".ahdr"]
+        headerFile = f
+        dataFile = (onlyHeader | onlyMarkers) ? "" : find_eeg_data(path, root)
+        markerFile = onlyHeader ? "" : find_eeg_markers(path, root)
+    elseif ext == ".vmrk"
+        headerFile = find_eeg_header(path, root)
+        dataFile = (onlyHeader | onlyMarkers) ? "" : find_eeg_data(path, root)
+        markerFile = f
+    else
+        error("Unknown file type $f. Expected .vhdr, .eeg, or .vmrk file types.")
+    end
+
+    return headerFile, dataFile, markerFile
+end
+
+# Check if a header file with a certain name exists
+function find_eeg_header(path, root)
+    if isfile(joinpath(path, root * ".vhdr")) 
+        headerFile = joinpath(path, root * ".vhdr")
+    elseif isfile(joinpath(path, root * ".ahdr")) 
+        headerFile = joinpath(path, root * ".ahdr")
+    else
+        error("Could not find the header file at $(joinpath(path, root * ".vhdr"))")
+    end
+
+    return headerFile
+end
+
+# Check if a data file with a certain name exists
+function find_eeg_data(path, root)
+    if isfile(joinpath(path, root * ".eeg")) 
+        dataFile = joinpath(path, root * ".eeg")
+    else
+        error("Could not find the data file at $(joinpath(path, root * ".eeg"))")
+    end
+
+    return dataFile
+end
+
+# Check if a marker file with a certain name exists
+function find_eeg_markers(path, root)
+    if isfile(joinpath(path, root * ".vmrk")) 
+        markerFile = joinpath(path, root * ".vmrk")
+    else
+        markerFile = ""
+    end
+
+    return markerFile
 end
 
 # Read the info from vhdr file
@@ -267,8 +339,8 @@ function parse_markers(fid)
     return EEGMarkers(number, type, description, position, duration, chanNum, date)
 end
 
-# Read the sensor data from eeg file
-function read_eeg_data(fid::IO, header::EEGHeader, markers::EEGMarkers, numPrecision, chanSelect, chanIgnore, timeSelect)
+
+function read_eeg_data(fid::IO, header::EEGHeader, markers::EEGMarkers, numPrecision, chanSelect, chanIgnore, timeSelect, method, tasks)
     if header.binary == Int16
         bytes = 2
     elseif header.binary == Float32
@@ -296,40 +368,72 @@ function read_eeg_data(fid::IO, header::EEGHeader, markers::EEGMarkers, numPreci
     update_header!(header, chans)
     update_markers!(markers, samples)
 
-    raw = Mmap.mmap(fid, Matrix{header.binary}, (nDataChannels, nDataSamples))
+    raw = read_method(fid, method, Matrix{header.binary}, (nDataChannels, nDataSamples))
     data = Array{numPrecision}(undef, (nSamples, nChannels))
 
-    convert_data!(raw, data, samples, chans, resolution)
+    convert_data!(raw, data, header, nDataChannels, nDataSamples, samples, chans, resolution, bytes, tasks)
 
     finalize(raw)
     return data
 end
 
+# Mmap version
+function convert_data!(raw::Array, data, header, nDataChannels, nDataSamples, samples, chans, resolution, bytes, tasks)
 
-# Covert data to Float
-function convert_data!(raw::Array, data::Array{T}, samples, chans, resolution) where T <: AbstractFloat
-    Threads.@threads for (idx, sample) in collect(enumerate(samples))
-        @inbounds @views data[idx,:] .= T.(raw[chans,sample]) .* resolution[chans]
+    @tasks for sidx in eachindex(samples)
+        @set scheduler = DynamicScheduler(; nchunks=tasks)
+        convert_chunk!(raw, data, samples[sidx], sidx, chans, resolution)
     end
+
+    return nothing
 end
 
-# Promote data to bigger Int
-function convert_data!(raw::Array, data::Array{T}, samples, chans, resolution) where T <: Integer
-    Threads.@threads for (idx, sample) in collect(enumerate(samples))
-        @inbounds @views data[idx,:] .= round.(T, raw[chans,sample] .* resolution[chans])
+# Direct version
+function convert_data!(raw::IO, data, header, nDataChannels, nDataSamples, samples, chans, resolution, bytes, tasks)
+    readLock = ReentrantLock()
+
+    # Divide the input data into 2 MB chunks to reduce the number of read calls
+    offset = nDataChannels * bytes
+    maxChunk = 2_000_000 ÷ offset
+
+    scratch = TaskLocalValue{Array{header.binary}}(() -> Array{header.binary}(undef, (nDataChannels, maxChunk)))
+    
+    filechunks = collect(partition(1:length(samples), maxChunk))
+
+    @tasks for chunk in filechunks
+        @set scheduler = DynamicScheduler(; nchunks=tasks)
+        convert_chunk!(raw, chunk, scratch[], data, samples, chans, resolution, offset, readLock)
     end
+
+    return nothing
 end
 
-# Copy data as Float32 format
-function convert_data!(raw::Array{Float32}, data::Array{Float32}, samples, chans, resolution)
-    Threads.@threads for (idx, sample) in collect(enumerate(samples))
-        @inbounds @views data[idx,:] .= raw[chans,sample] .* resolution[chans]
+function convert_chunk!(raw::IO, chunk, scratch, data, samples, chans, resolution, offset, readlock)
+    samplePosition = (samples[chunk[1]] - 1) * offset
+    lock(readlock) do 
+        seek(raw, samplePosition)
+        read!(raw, view(scratch, :, 1:length(chunk)))
     end
+
+    for dataIdx in eachindex(chunk)
+        convert_chunk!(scratch, data, samples[chunk[dataIdx]], dataIdx, chans, resolution)
+    end
+
+    return nothing
 end
 
-# Copy data as Int16 format
-function convert_data!(raw::Array{Int16}, data::Array{Int16}, samples, chans, resolution)
-    Threads.@threads for (idx, sample) in collect(enumerate(samples))
-        @inbounds @views data[idx,:] .= raw[chans,sample]
-    end
+function convert_chunk!(scratch, data::Array{T}, scratchIdx, dataIdx, chans, resolution) where T <: AbstractFloat
+    @inbounds @views data[scratchIdx,:] .= T.(scratch[chans, dataIdx]) .* resolution[chans]
+end
+
+function convert_chunk!(scratch, data::Array{T}, scratchIdx, dataIdx, chans, resolution) where T <: Integer
+    @inbounds @views data[scratchIdx,:] .= round.(T, scratch[chans, dataIdx] .* resolution[chans])
+end
+
+function convert_chunk!(scratch::Array{Float32}, data::Array{Float32}, scratchIdx, dataIdx, chans, resolution)
+    @inbounds @views data[scratchIdx,:] .= scratch[chans, dataIdx] .* resolution[chans]
+end
+
+function convert_chunk!(scratch::Array{Int16}, data::Array{Int16}, scratchIdx, dataIdx, chans, resolution)
+    @inbounds @views data[scratchIdx,:] .= scratch[chans, dataIdx]
 end
