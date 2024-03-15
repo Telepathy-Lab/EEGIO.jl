@@ -159,7 +159,8 @@ function read_edf_data!(raw::IO, data, header, recSamples, records, chans, scale
     posi = position(raw)
     readLock = ReentrantLock()
 
-    tforeach(records; scheduler=DynamicScheduler(; nchunks=tasks)) do recIdx 
+    @tasks for recIdx in records
+        @set scheduler = DynamicScheduler(; nchunks=tasks)
         parse_record!(raw, data, scratch[], dataStart[], dataEnd[], recIdx, header, readLock, posi, recSamples, chans, chanOffset, scaleFactors, offsets)
     end
 
@@ -190,7 +191,8 @@ function read_edf_data!(raw::Vector, data, header, recSamples, records, chans, s
     dataStart = TaskLocalValue{Vector{Int}}(() -> Vector{Int}(undef, length(chans)))
     dataEnd = TaskLocalValue{Vector{Int}}(() -> Vector{Int}(undef, length(chans)))
 
-    tforeach(1:length(records); scheduler=DynamicScheduler(; nchunks=tasks)) do ridx
+    @tasks for ridx in records
+        @set scheduler = DynamicScheduler(; nchunks=tasks)
         parse_record!(raw, data, header, records, ridx, recSamples, chans, chanOffset, dataStart[], dataEnd[], scaleFactors, offsets)
     end
 
