@@ -17,8 +17,8 @@ decodeNumber(fid, numType, size) = parse(numType, ascii(String(read!(fid, Array{
 function decodeChanStrings(fid, nChannels, size)
     arr = Array{String}(undef, nChannels)
     buf = read(fid, nChannels*size)
-    for i=1:nChannels
-        @inbounds arr[i] = strip(ascii(String(buf[(size*(i-1)+1):(size*i)])))
+    for i=eachindex(arr)
+        arr[i] = strip(ascii(String(buf[(size*(i-1)+1):(size*i)])))
     end
     return arr
 end
@@ -27,8 +27,8 @@ end
 function decodeChanNumbers(fid, numType, nChannels, size)
     arr = Array{numType}(undef, nChannels)
     buf = read(fid, nChannels*size)
-    for i=1:nChannels
-        @inbounds arr[i] = parse(numType, ascii(String(buf[(size*(i-1)+1):(size*i)])))
+    for i=eachindex(arr)
+        arr[i] = parse(numType, ascii(String(buf[(size*(i-1)+1):(size*i)])))
     end
     return arr
 end

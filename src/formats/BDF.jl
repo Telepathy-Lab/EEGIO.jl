@@ -22,9 +22,16 @@ mutable struct BDFHeader <: Header
     reserved::Vector{String}
 end
 
+ mutable struct BDFStatus{T<:Integer}
+    low::Vector{T}
+    high::Vector{T}
+    status::Vector{T}
+end
+
 mutable struct BDF <: EEGData
     header::BDFHeader
-    data::Matrix
+    data::Array
+    status::BDFStatus
     path::String
     file::String
 end
@@ -135,6 +142,17 @@ function BDFHeader(samples::Integer, channels::Integer, sRate::Integer;
     transducer, physDim, physMin, physMax, digMin, digMax, prefilt, nSampRec, reserved)
 end
 
+
+function BDFStatus(length::T) where T <: Integer
+    low = Vector{UInt8}(undef, length)
+    high = Vector{UInt8}(undef, length)
+    status = Vector{UInt8}(undef, length)
+
+    return BDFStatus(low, high, status)
+end
+
+Base.isempty(status::BDFStatus) = isempty(status.low)
+
 # Check if number of elements in channel-related string fields matches number of channels.
 function check_fields(nChannels::Integer, name, field)
     if field == ""
@@ -234,7 +252,8 @@ function BDF(data::Array, sRate::Integer; path="", file="", kwargs...)
         (in channels $(join(outBounds, ", ")))."
     end
 
-    return BDF(header, data, path, file)
+    status = BDFStatus(0)
+    return BDF(header, data, status, path, file)
 end
 
 # Find channels which data spans beyond 24 bits
@@ -259,10 +278,13 @@ function check_bounds(header::BDFHeader, data)
 end
 
 Base.show(io::IO, bdf::BDFHeader) = print(io, "BDF Header")
+Base.show(io::IO, bdf::BDFStatus) = print(io, "BDF Status data")
 Base.show(io::IO, ::MIME"text/plain", ::Type{BDF}) = print(io, "BDF")
 
 function Base.show(io::IO, m::MIME"text/plain", bdf::BDF) 
+    onlyHeader = isempty(bdf.data) ? "only header data, " : ""
+    readStatus = isempty(bdf.status) ? "" : " + Status"
     print(io, 
-    "BDF file ($(bdf.header.nChannels) channels, \
+    "BDF file ($(onlyHeader)$(bdf.header.nChannels) channels$readStatus, \
     duration: $(round(bdf.header.nDataRecords/60,digits=2)) min.)")
 end

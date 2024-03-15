@@ -86,12 +86,13 @@ function read_bdf(fid::IO; path="", file="", onlyHeader=false, addOffset=true, n
     header = read_bdf_header(fid)
 
     if onlyHeader
-        data = Vector{numPrecision}(undef, 0)
+        data = Array{numPrecision}(undef, (0, 0))
+        status = BDFStatus(0)
     else
         # Read the data
-        data = read_bdf_data(fid, header, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, method, tasks)
+        data, status = read_bdf_data(fid, header, addOffset, numPrecision, chanSelect, chanIgnore, timeSelect, readStatus, method, tasks)
     end
-    return BDF(header, data, path, file)
+    return BDF(header, data, status, path, file)
 end
 
 """
@@ -151,49 +152,64 @@ function read_bdf_data(fid::IO, header::BDFHeader, addOffset, numPrecision, chan
     records = pick_samples(header, timeSelect)
     chans = pick_channels(header, chanSelect)
     chans = setdiff(chans, pick_channels(header, chanIgnore))
-    if readStatus chans = check_status(header, chans) end
+    chans, statusIdx = check_status(header, chans)
 
     raw = read_method(fid, method, Vector{UInt8}, 3*header.nDataRecords*nChannels*srate)
 
     data = Array{numPrecision}(undef, (srate*length(records),length(chans)));
-    convert_data!(raw, data, srate, records, chans, nChannels, scaleFactors, offsets, tasks)
+    if readStatus
+        status = BDFStatus(srate*length(records))
+    else
+        status = BDFStatus(0)
+    end
+
+    convert_data!(raw, data, status, srate, records, chans, nChannels, statusIdx, scaleFactors, offsets, tasks)
     
     # Update the header to reflect the subset of data actually read.
     update_header!(header, records)
     update_header!(header, chans)
 
-    return data
+    return data, status
 end
 
 # Always include status channel unless explicitly stated otherwise
 function check_status(header, chans)
     ind = findfirst(isequal("Status"), header.chanLabels)
+
+    # Check if Status channel exists and is at the end of file
     if isnothing(ind) 
-        error("No Status channel in the file! If you want to ignore it, set readStatus=false.")
-    elseif ind ∉ chans
-        return [chans..., ind]
+        error("No channel named Status in the file! If you want to ignore it, set readStatus=false.")
+    elseif ind != length(header.chanLabels)
+        @warn "Status is not the last channel as expected based on format specification. \
+            Check if read data are correct."
+    end
+
+    # Remove Status from other channels and return them seperately
+    if ind ∈ chans
+        deleteat!(chans, ind)
+        return chans, ind
     else
-        return chans
+        return chans, ind
     end
 end
 
 # Read data from one record into a buffer and copy it to the output matrix
-function convert_data!(raw::IO, data, srate, records, chans, nChannels, scaleFactors, offsets, tasks)
+function convert_data!(raw::IO, data, status, srate, records, chans, nChannels, statusIdx, scaleFactors, offsets, tasks)
 
     posi = position(raw)
     readLock = ReentrantLock()
 
-    scratch = TaskLocalValue{Array{UInt8}}(() -> Array{UInt8}(undef, (3, srate, maximum(chans))))
+    scratch = TaskLocalValue{Array{UInt8}}(() -> Array{UInt8}(undef, (3, srate, maximum([chans..., statusIdx]))))
 
-    @tasks for recIdx in 1:length(records)
-        @set scheduler = DynamicScheduler(; nchunks=tasks)
-        convert_data!(raw, data, scratch, readLock, posi, srate, recIdx, records, chans, nChannels, scaleFactors, offsets)
+    for recIdx in 1:length(records)
+        # @set scheduler = DynamicScheduler(; nchunks=tasks)
+        convert_data!(raw, data, status, scratch, readLock, posi, srate, recIdx, records, chans, nChannels, statusIdx, scaleFactors, offsets)
     end
 
     return data
 end
 
-function convert_data!(raw::IO, data, scratch, readLock, posi, srate, recIdx, records, chans, nChannels, scaleFactors, offsets)
+function convert_data!(raw::IO, data, status, scratch, readLock, posi, srate, recIdx, records, chans, nChannels, statusIdx, scaleFactors, offsets)
     
     rawOffset = 3 * (records[recIdx] - 1) * nChannels * srate + posi
 
@@ -204,12 +220,12 @@ function convert_data!(raw::IO, data, scratch, readLock, posi, srate, recIdx, re
     
     recordOffset = (recIdx-1) * srate
 
-    parse_record!(scratch[], data, recordOffset, chans, scaleFactors, offsets)
+    parse_record!(scratch[], data, status, recordOffset, chans, statusIdx, scaleFactors, offsets)
 
     return nothing
 end
 
-function parse_record!(raw::Array{UInt8}, data, recordOffset, chans, scaleFactors, offsets)
+function parse_record!(raw, data, status, recordOffset, chans, statusIdx, scaleFactors, offsets)
     for (chanIdx, chan) in enumerate(chans)
         scaleFactor = scaleFactors[chan]
         offset = offsets[chan]
@@ -217,6 +233,15 @@ function parse_record!(raw::Array{UInt8}, data, recordOffset, chans, scaleFactor
         for triplet in eachcol(view(raw, :, :, chan))
             idx += 1
             parse_value!(triplet, data, recordOffset+idx, 0, chanIdx, scaleFactor, offset)
+        end
+    end
+
+    # Parse Status values
+    if !isempty(status)
+        idx = 0
+        for triplet in eachcol(view(raw, :, :, statusIdx))
+            idx += 1
+            parse_status!(triplet, status, recordOffset+idx, 0)
         end
     end
 
@@ -266,4 +291,10 @@ function convert24to32(bytes, sample)
     return ((Int32(bytes[3*sample+1]) << 8) | 
             (Int32(bytes[3*sample+2]) << 16) | 
             (Int32(bytes[3*sample+3]) << 24)) >> 8
+end
+
+function parse_status!(raw, status, idx, sample)
+    @inbounds status.low[idx] = raw[3*sample+1]
+    @inbounds status.high[idx] = raw[3*sample+2]
+    @inbounds status.status[idx] = raw[3*sample+3]
 end

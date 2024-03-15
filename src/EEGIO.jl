@@ -10,7 +10,9 @@ version = "0.1.0"
 
 abstract type EEGData end
 abstract type Header end
-export EEGData
+
+# Misc functions
+include("utils/misc.jl")
 
 # BDF files
 include("formats/BDF.jl")
