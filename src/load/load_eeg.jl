@@ -47,7 +47,13 @@ consult the online documentation for a more thorough explanation of different op
       Using a tuple of floats will be interpreted as start and stop values in seconds
       and all samples that fit this time span will be read.
       Using Symbol :All will read every sample in the file. This is also the default.
-
+- `method::Symbol=:Direct`
+    - Choose the IO method of reading data. Can be either :Direct (set as the default) for 
+      reading the file in chunks or :Mmap for using memory mapping.
+- `tasks::Int=1`
+    - Specifies how many concurent tasks will be spawn to read chunks of data. Tasks will use
+      as many threads as there are available to Julia, but users can specify a higher number.
+      Default is set to 1 (equal to single threaded run).
 
 Current implementation follows closely the specification formulated by [BrainVision]
 (https://www.brainproducts.com/download/specification-of-brainvision-core-data-format-1-0/).
@@ -56,7 +62,7 @@ even if recorded with BrainVision hardware. If your files are not read properly,
 issue on github and try to provide a sample dataset to reproduce the problem.
 """
 function read_eeg(f::String; onlyHeader=false, onlyMarkers=false, numPrecision=Float64, 
-    chanSelect=:All, chanIgnore=:None, timeSelect=:All, method=:Direct, tasks=Threads.nthreads())
+    chanSelect=:All, chanIgnore=:None, timeSelect=:All, method=:Direct, tasks=1)
 
     path, file = splitdir(f)
     # Check if an existing path is given and find relevant files
