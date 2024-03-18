@@ -48,43 +48,6 @@ function write_bdf_header(fid, bdf::BDF)
     write_channel_records(fid, chans, header.reserved, 32)
 end
 
-# Write the general data information
-function write_record(fid, field, fieldLength; default="")
-    # Prepare the entry.
-    if field == ""
-        record = rpad(string(default), fieldLength)
-    else
-        if length(field)>fieldLength
-            @warn "Header field \"$field\"
-                    is longer than required $fieldLength bytes and will be truncated."
-        end
-        record = rpad(string(field),fieldLength)
-    end
-
-    # Write bytes to file
-    write(fid, codeunits(record))
-end
-
-# Write the chennel specific information
-function write_channel_records(fid, nChannels, field, fieldLength; default="")
-    for chan in 1:nChannels
-        #Prepare the entry for each channel.
-        if field == ""
-            record = rpad(string(default), fieldLength)
-        else
-            if length(field[chan])>fieldLength
-                @warn "Header field \"$field\" entry on position $chan
-                        is longer than required $fieldLength bytes and will be truncated."
-            end
-            record = rpad(string(field[chan]), fieldLength)
-        end
-
-        # Write bytes to file
-        write(fid, codeunits(record))
-    end
-end
-
-
 # Write data into a file.
 function write_bdf_data(fid, header, data, useOffset, method, chunk)
     scaleFactor = Float32.(header.physMax-header.physMin)./(header.digMax-header.digMin)

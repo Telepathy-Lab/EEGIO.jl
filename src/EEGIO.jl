@@ -23,7 +23,8 @@ export BDF, BDFHeader, read_bdf, write_bdf
 #EDF files
 include("formats/EDF.jl")
 include("load/load_edf.jl")
-export EDF, EDFHeader, read_edf
+include("save/save_edf.jl")
+export EDF, EDFHeader, read_edf, write_edf
 
 # EEG files
 include("formats/EEG.jl")
