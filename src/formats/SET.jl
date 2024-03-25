@@ -84,8 +84,8 @@ mutable struct SET <: EEGData
     file::String
 end
 
-Base.show(io::IO, set::EEGHeader) = print(io, "SET Header")
-Base.show(io::IO, set::EEGMarkers) = print(io, "SET Markers")
+Base.show(io::IO, set::SETHeader) = print(io, "SET Header")
+Base.show(io::IO, set::SETChannels) = print(io, "SET Channels")
 
 function Base.show(io::IO, set::SET)
     print(io,
