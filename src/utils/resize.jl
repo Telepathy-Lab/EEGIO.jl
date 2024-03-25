@@ -3,29 +3,25 @@
 # These functions are also sed in the main read functions.
 
 # Functions to update BDF header.
-function update_header(header::BDFHeader, change)
+function update_header(header::BEDFHeader, change)
     newHeader = deepcopy(header)
     update_header!(newHeader, change)
     return newHeader
 end
 
-function update_header!(header::BDFHeader, records::UnitRange)
+function update_header!(header::BEDFHeader, records::UnitRange)
     header.nDataRecords = length(records)
 end
 
-function update_header!(header::BDFHeader, chans::Vector)
+function update_header!(header::BEDFHeader, chans::Vector)
     header.nBytes = (length(chans)+1)*256
     header.nChannels = length(chans)
-    header.chanLabels = header.chanLabels[chans]
-    header.transducer = header.transducer[chans]
-    header.physDim = header.physDim[chans]
-    header.physMin = header.physMin[chans]
-    header.physMax = header.physMax[chans]
-    header.digMax = header.digMax[chans]
-    header.digMin = header.digMin[chans]
-    header.prefilt = header.prefilt[chans]
-    header.reserved = header.reserved[chans]
-    header.nSampRec = header.nSampRec[chans]
+
+    for hfield in fieldnames(typeof(header))
+        if typeof(getfield(header, hfield)) <: AbstractVector
+            setfield!(header, hfield, getfield(header, hfield)[chans])
+        end
+    end
 end
 
 # Functions to update EEG header.

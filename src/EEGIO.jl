@@ -20,11 +20,20 @@ include("load/load_bdf.jl")
 include("save/save_bdf.jl")
 export BDF, BDFHeader, read_bdf, write_bdf
 
+#EDF files
+include("formats/EDF.jl")
+include("load/load_edf.jl")
+include("save/save_edf.jl")
+export EDF, EDFHeader, read_edf, write_edf
+
 # EEG files
 include("formats/EEG.jl")
 include("load/load_eeg.jl")
 include("save/save_eeg.jl")
 export EEG, EEGHeader, EEGMarkers, read_eeg, write_eeg
+
+# Convenient type unions
+BEDFHeader = Union{BDFHeader, EDFHeader}
 
 # Helper functions
 include("utils/pick_channels.jl")
