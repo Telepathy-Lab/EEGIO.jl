@@ -95,3 +95,4 @@ end
 channel_info(header::BDFHeader) = header.nChannels, header.chanLabels
 channel_info(header::EDFHeader) = header.nChannels, header.chanLabels
 channel_info(header::EEGHeader) = header.common["NumberOfChannels"], header.channels["name"]
+channel_info(header::SETHeader) = header.nbchan, header.chanlocs.labels

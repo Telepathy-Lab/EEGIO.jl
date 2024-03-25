@@ -105,3 +105,43 @@ function pick_samples(header::EEGHeader, times::Tuple{AbstractFloat, AbstractFlo
         error("Time range $times does not fit the available length of the data: $signalTime")
     end
 end
+
+# SET selection
+function pick_samples(header::SETHeader, records::Symbol)
+    if records == :All
+        return 1:header.pnts
+    else
+        error("Unknown symbol :$records passed. Did You mean :All?")
+    end
+end
+
+# Integer interpreted as a single sample.
+function pick_samples(header::SETHeader, sample::Integer)
+    if 0 < sample < header.pnts
+        return sample:sample
+    else
+        error("Number of a record to read should be between 1 and $(header.pnts). Got $sample instead.")
+    end
+end
+
+# Unitrange interpreted as an interval of samples the should be read.
+function pick_samples(header::SETHeader, samples::UnitRange)
+    if samples[1] >= 1 && samples[end] <= header.pnts
+        return samples
+    else
+        error("Range $samples does not fit in the available $(header.pnts) records.")
+    end
+end
+
+# Tuple of floats interpreted as seconds. All samples fitting it will be read.
+# This follows the Julia convention, where end of an interval is also included.
+function pick_samples(header::SETHeader, times::Tuple{AbstractFloat, AbstractFloat})
+    sRate = header.srate
+    signalTime = header.pnts / sRate
+
+    if 0 <= times[1] && times[2] <= signalTime
+        return round(Int, (times[1]-1)*sRate+1):round(Int, times[2]*sRate)
+    else
+        error("Time range $times does not fit the available length of the data: $signalTime")
+    end
+end

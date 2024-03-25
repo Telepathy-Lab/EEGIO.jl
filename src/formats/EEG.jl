@@ -277,7 +277,7 @@ end
 Base.show(io::IO, eeg::EEGHeader) = print(io, "EEG Header")
 Base.show(io::IO, eeg::EEGMarkers) = print(io, "EEG Markers")
 
-function Base.show(io::IO, eeg::EEGData)
+function Base.show(io::IO, eeg::EEG)
     print(io,
     "EEG file ($(eeg.header.common["NumberOfChannels"]) channels, \
     duration: $(round(size(eeg.data, 1)/(1_000_000/eeg.header.common["SamplingInterval"]*60),digits=2)) min.)"

@@ -70,6 +70,50 @@ function update_markers!(markers::EEGMarkers, samples)
     end
 end
 
+# Functions to update SET header
+function update_header!(header::SETHeader, chans::Vector)
+    header.nbchan = length(chans)
+    # Transfer channel data to urchanlocs if it is empty
+    if isempty(header.urchanlocs)
+        for prop in propertynames(header.chanlocs)
+            header.urchanlocs[string(prop)] = getproperty(header.chanlocs, prop)
+        end
+    end
+
+    # Leave only the data for those channels that are actually being read
+    for prop in propertynames(header.chanlocs)
+        if !isempty(getproperty(header.chanlocs, prop))
+            setproperty!(header.chanlocs, prop, getproperty(header.chanlocs, prop)[chans])
+        end
+    end
+
+    # Store channel IDs so they can be referred back to urchans (if they are not already there)
+    if isempty(header.chanlocs.urchan) || all(isnothing.(header.chanlocs.urchan))
+        header.chanlocs.urchan = chans
+    end
+end
+
+function update_header!(header::SETHeader, samples::UnitRange)
+    header.pnts = length(samples)
+
+    if !isempty(header.event)
+        # Transfer event data to urevent if it is empty
+        if isempty(header.urevent)
+            for prop in keys(header.event)
+                header.urevent[prop] = header.event[prop]
+            end
+        end
+
+        # Leave only the data for those events that are actually being read
+        mask = first(samples) .<= header.event["latency"] .<= last(samples)
+        for prop in keys(header.event)
+            if !isempty(header.event[prop])
+                header.event[prop] = header.event[prop][mask]
+            end
+        end
+    end
+end
+
 """
     crop(file::EEGData, timeSelect)
 
