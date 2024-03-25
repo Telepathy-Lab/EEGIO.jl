@@ -41,7 +41,7 @@ function read_set(fid; path="", file="", onlyHeader=false, addOffset=true, numPr
         end
 
     elseif typeof(rawData) <: AbstractArray
-        data = read_set_data(rawData, header, numPrecision, chanSelect, chanIgnore, timeSelect)
+        data = read_set_data(rawData, header, numPrecision, chanSelect, chanIgnore, timeSelect, tasks)
     else
         error("EEG data in file is of unknown type: $(type(rawData)).")
     end
@@ -117,7 +117,7 @@ get_zero(T::Any) = nothing
 get_zero(T::Type{<:Number}) = zero(T)
 get_zero(T::Type{<:AbstractString}) = ""
 
-function read_set_data(rawData::Array, header::SETHeader, numPrecision, chanSelect, chanIgnore, timeSelect)
+function read_set_data(rawData::Array, header::SETHeader, numPrecision, chanSelect, chanIgnore, timeSelect, tasks)
     dims = size(rawData)
     flip = header.nbchan == dims[1] ? true : false
 
@@ -140,7 +140,7 @@ function read_set_data(rawData::Array, header::SETHeader, numPrecision, chanSele
 
     data = Array{numPrecision}(undef, (nSamples, nChannels))
 
-    flip ? flip_copy!(rawData, data, chans, samples) : noflip_copy!(rawData, data, chans, samples)
+    flip ? flip_copy!(rawData, data, chans, samples, tasks) : noflip_copy!(rawData, data, chans, samples, tasks)
 
     update_header!(header, chans)
     update_header!(header, samples)
@@ -148,14 +148,16 @@ function read_set_data(rawData::Array, header::SETHeader, numPrecision, chanSele
     return data
 end
 
-function flip_copy!(rawData, data, chans, samples)
-    for sIdx in samples
+function flip_copy!(rawData, data, chans, samples, tasks)
+    @tasks for sIdx in samples
+        @set scheduler = DynamicScheduler(; nchunks=tasks)
         @views data[sIdx,:] .= rawData[chans, sIdx]
     end
 end
 
-function noflip_copy!(rawData, data, chans, samples)
-    for sIdx in samples
+function noflip_copy!(rawData, data, chans, samples, tasks)
+    @tasks for sIdx in samples
+        @set scheduler = DynamicScheduler(; nchunks=tasks)
         @views data[sIdx,:] .= rawData[sIdx, chans]
     end
 end
