@@ -1,7 +1,19 @@
 function read_set(f::String; kwargs...)
     # Check if an existing path is given, then open the file
-    if ispath(f)
+    if isfile(f)
         path, file = splitdir(f)
+
+        # Check if it is a .fdt file and search for .set if yes
+        root, ext = splitext(file)
+        if ext == ".fdt"
+            f = joinpath(path, root * ".set")
+            if !isfile(f)
+                error("$f file was expected, but does not exist.")
+            end
+        elseif ext != ".set"
+            error("Expected a SET or FDT file, got $file.")
+        end
+
         matopen(f) do fid
             read_set(fid; path=path, file=file, kwargs...)
         end
