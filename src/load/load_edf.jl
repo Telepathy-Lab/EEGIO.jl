@@ -152,16 +152,18 @@ end
 function read_edf_data!(raw::IO, data, header, recSamples, records, chans, scaleFactors, offsets, tasks)
     chanOffset = vcat([1], accumulate(+, header.nSampRec, init=1)[1:end-1])
 
-    scratch = TaskLocalValue{Vector{Int16}}(() -> Vector{Int16}(undef, recSamples))
-    dataStart = TaskLocalValue{Vector{Int}}(() -> Vector{Int}(undef, length(chans)))
-    dataEnd = TaskLocalValue{Vector{Int}}(() -> Vector{Int}(undef, length(chans)))
-
     posi = position(raw)
     readLock = ReentrantLock()
 
     @tasks for recIdx in records
-        @set scheduler = DynamicScheduler(; nchunks=tasks)
-        parse_record!(raw, data, scratch[], dataStart[], dataEnd[], recIdx, header, readLock, posi, recSamples, chans, chanOffset, scaleFactors, offsets)
+        @set ntasks = tasks
+        @local begin
+            scratch = Vector{Int16}(undef, recSamples)
+            dataStart = Vector{Int}(undef, length(chans))
+            dataEnd = Vector{Int}(undef, length(chans))
+        end
+
+        parse_record!(raw, data, scratch, dataStart, dataEnd, recIdx, header, readLock, posi, recSamples, chans, chanOffset, scaleFactors, offsets)
     end
 
     return nothing
@@ -188,11 +190,13 @@ end
 function read_edf_data!(raw::Vector, data, header, recSamples, records, chans, scaleFactors, offsets, tasks)
     chanOffset = vcat([1], accumulate(+, header.nSampRec, init=1)[1:end-1])
 
-    dataStart = TaskLocalValue{Vector{Int}}(() -> Vector{Int}(undef, length(chans)))
-    dataEnd = TaskLocalValue{Vector{Int}}(() -> Vector{Int}(undef, length(chans)))
-
     @tasks for ridx in records
-        @set scheduler = DynamicScheduler(; nchunks=tasks)
+        @set ntasks = tasks
+        @local begin
+            dataStart = Vector{Int}(undef, length(chans))
+            dataEnd = Vector{Int}(undef, length(chans))
+        end
+
         parse_record!(raw, data, header, records, ridx, recSamples, chans, chanOffset, dataStart[], dataEnd[], scaleFactors, offsets)
     end
 

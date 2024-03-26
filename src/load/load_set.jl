@@ -150,14 +150,14 @@ end
 
 function flip_copy!(rawData, data, chans, samples, tasks)
     @tasks for sIdx in samples
-        @set scheduler = DynamicScheduler(; nchunks=tasks)
+        @set ntasks=tasks
         @views data[sIdx,:] .= rawData[chans, sIdx]
     end
 end
 
 function noflip_copy!(rawData, data, chans, samples, tasks)
     @tasks for sIdx in samples
-        @set scheduler = DynamicScheduler(; nchunks=tasks)
+        @set ntasks=tasks
         @views data[sIdx,:] .= rawData[sIdx, chans]
     end
 end

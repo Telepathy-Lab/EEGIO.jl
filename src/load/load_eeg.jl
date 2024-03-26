@@ -374,7 +374,7 @@ end
 function convert_data!(raw::Array, data, dataType, nDataChannels, nDataSamples, samples, chans, resolution, bytes, tasks)
 
     @tasks for sidx in eachindex(samples)
-        @set scheduler = DynamicScheduler(; nchunks=tasks)
+        @set ntasks = tasks
         convert_chunk!(raw, data, samples[sidx], sidx, chans, resolution)
     end
 
@@ -388,13 +388,13 @@ function convert_data!(raw::IO, data, dataType::Type, nDataChannels, nDataSample
     # Divide the input data into 2 MB chunks to reduce the number of read calls
     offset = nDataChannels * bytes
     maxChunk = 2_000_000 ÷ offset
-
-    scratch = TaskLocalValue{Array{dataType}}(() -> Array{dataType}(undef, (nDataChannels, maxChunk)))
     
-    filechunks = collect(partition(1:length(samples), maxChunk))
+    filechunks = collect(chunks(1:length(samples), size=maxChunk))
 
     @tasks for chunk in filechunks
-        @set scheduler = DynamicScheduler(; nchunks=tasks)
+        @set ntasks = tasks
+        @local scratch = Array{dataType}(undef, (nDataChannels, maxChunk))
+
         convert_chunk!(raw, chunk, scratch[], data, samples, chans, resolution, offset, readLock)
     end
 
