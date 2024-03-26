@@ -395,7 +395,7 @@ function convert_data!(raw::IO, data, dataType::Type, nDataChannels, nDataSample
         @set ntasks = tasks
         @local scratch = Array{dataType}(undef, (nDataChannels, maxChunk))
 
-        convert_chunk!(raw, chunk, scratch[], data, samples, chans, resolution, offset, readLock)
+        convert_chunk!(raw, chunk, scratch, data, samples, chans, resolution, offset, readLock)
     end
 
     return nothing

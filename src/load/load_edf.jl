@@ -197,7 +197,7 @@ function read_edf_data!(raw::Vector, data, header, recSamples, records, chans, s
             dataEnd = Vector{Int}(undef, length(chans))
         end
 
-        parse_record!(raw, data, header, records, ridx, recSamples, chans, chanOffset, dataStart[], dataEnd[], scaleFactors, offsets)
+        parse_record!(raw, data, header, records, ridx, recSamples, chans, chanOffset, dataStart, dataEnd, scaleFactors, offsets)
     end
 
     return nothing
