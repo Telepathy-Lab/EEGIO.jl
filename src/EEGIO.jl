@@ -1,8 +1,9 @@
 module EEGIO
 
 using Mmap
-using Base.Iterators: partition
-using OhMyThreads: @tasks, TaskLocalValue, DynamicScheduler
+using MAT
+using OhMyThreads: @tasks, @set, @local, chunks
+
 
 # TODO make a test to check if this value is updated
 # with Pkg.TOML.parsefile(joinpath(pkgdir(EEGIO), "Project.toml"))["version"]
@@ -31,6 +32,11 @@ include("formats/EEG.jl")
 include("load/load_eeg.jl")
 include("save/save_eeg.jl")
 export EEG, EEGHeader, EEGMarkers, read_eeg, write_eeg
+
+# SET files
+include("formats/SET.jl")
+include("load/load_set.jl")
+export SET, SETHeader, read_set
 
 # Convenient type unions
 BEDFHeader = Union{BDFHeader, EDFHeader}

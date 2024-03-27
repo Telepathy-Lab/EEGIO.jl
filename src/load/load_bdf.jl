@@ -199,10 +199,9 @@ function convert_data!(raw::IO, data, status, srate, records, chans, nChannels, 
     posi = position(raw)
     readLock = ReentrantLock()
 
-    scratch = TaskLocalValue{Array{UInt8}}(() -> Array{UInt8}(undef, (3, srate, maximum([chans..., statusIdx]))))
-
-    for recIdx in 1:length(records)
-        # @set scheduler = DynamicScheduler(; nchunks=tasks)
+    @tasks for recIdx in 1:length(records)
+        @set ntasks = tasks
+        @local scratch = Array{UInt8}(undef, (3, srate, maximum([chans..., statusIdx])))
         convert_data!(raw, data, status, scratch, readLock, posi, srate, recIdx, records, chans, nChannels, statusIdx, scaleFactors, offsets)
     end
 
@@ -215,12 +214,12 @@ function convert_data!(raw::IO, data, status, scratch, readLock, posi, srate, re
 
     lock(readLock) do 
         seek(raw, rawOffset)
-        read!(raw, scratch[])
+        read!(raw, scratch)
     end
     
     recordOffset = (recIdx-1) * srate
 
-    parse_record!(scratch[], data, status, recordOffset, chans, statusIdx, scaleFactors, offsets)
+    parse_record!(scratch, data, status, recordOffset, chans, statusIdx, scaleFactors, offsets)
 
     return nothing
 end
@@ -251,7 +250,7 @@ end
 # Read data through mmap
 function convert_data!(raw::Vector, data, srate, records, chans, nChannels, scaleFactors, offsets, tasks)
     @tasks for recIdx in 1:length(records)
-        @set scheduler = DynamicScheduler(; nchunks=tasks)
+        @set ntasks = tasks
         parse_record!(raw, data, srate, recIdx, records, chans, nChannels, scaleFactors, offsets)
     end
     finalize(raw)

@@ -1,8 +1,3 @@
-# TODO: cover cases when user wants to read vhdr or vmrk file instead of eeg
-# TODO: read data and markers from files stated in vhdr file
-# TODO: check correctness with other files
-# TODO: Decide what to do with comment section - read it in or leave out?
-
 """
     read_eeg(f::String; kwargs...)
 
@@ -265,8 +260,6 @@ function parse_channels(fid)
     )
     if size(channels)[1] == 5
         chans["unit"] = channels[5,:]
-    elseif size(channels)[1] == 4
-        chans["unit"] = "µV"
     end
     return chans, line
 end
@@ -371,17 +364,17 @@ function read_eeg_data(fid::IO, header::EEGHeader, markers::EEGMarkers, numPreci
     raw = read_method(fid, method, Matrix{header.binary}, (nDataChannels, nDataSamples))
     data = Array{numPrecision}(undef, (nSamples, nChannels))
 
-    convert_data!(raw, data, header, nDataChannels, nDataSamples, samples, chans, resolution, bytes, tasks)
+    convert_data!(raw, data, header.binary, nDataChannels, nDataSamples, samples, chans, resolution, bytes, tasks)
 
     finalize(raw)
     return data
 end
 
 # Mmap version
-function convert_data!(raw::Array, data, header, nDataChannels, nDataSamples, samples, chans, resolution, bytes, tasks)
+function convert_data!(raw::Array, data, dataType, nDataChannels, nDataSamples, samples, chans, resolution, bytes, tasks)
 
     @tasks for sidx in eachindex(samples)
-        @set scheduler = DynamicScheduler(; nchunks=tasks)
+        @set ntasks = tasks
         convert_chunk!(raw, data, samples[sidx], sidx, chans, resolution)
     end
 
@@ -389,20 +382,20 @@ function convert_data!(raw::Array, data, header, nDataChannels, nDataSamples, sa
 end
 
 # Direct version
-function convert_data!(raw::IO, data, header, nDataChannels, nDataSamples, samples, chans, resolution, bytes, tasks)
+function convert_data!(raw::IO, data, dataType::Type, nDataChannels, nDataSamples, samples, chans, resolution, bytes, tasks)
     readLock = ReentrantLock()
 
     # Divide the input data into 2 MB chunks to reduce the number of read calls
     offset = nDataChannels * bytes
     maxChunk = 2_000_000 ÷ offset
-
-    scratch = TaskLocalValue{Array{header.binary}}(() -> Array{header.binary}(undef, (nDataChannels, maxChunk)))
     
-    filechunks = collect(partition(1:length(samples), maxChunk))
+    filechunks = collect(chunks(1:length(samples), size=maxChunk))
 
     @tasks for chunk in filechunks
-        @set scheduler = DynamicScheduler(; nchunks=tasks)
-        convert_chunk!(raw, chunk, scratch[], data, samples, chans, resolution, offset, readLock)
+        @set ntasks = tasks
+        @local scratch = Array{dataType}(undef, (nDataChannels, maxChunk))
+
+        convert_chunk!(raw, chunk, scratch, data, samples, chans, resolution, offset, readLock)
     end
 
     return nothing
@@ -416,7 +409,7 @@ function convert_chunk!(raw::IO, chunk, scratch, data, samples, chans, resolutio
     end
 
     for dataIdx in eachindex(chunk)
-        convert_chunk!(scratch, data, samples[chunk[dataIdx]], dataIdx, chans, resolution)
+        convert_chunk!(scratch, data, chunk[dataIdx], dataIdx, chans, resolution)
     end
 
     return nothing
